@@ -3,7 +3,7 @@
 // où une ancienne version mise en cache (CSS/JS) s'affichait tant que le
 // cache n'était pas invalidé manuellement. Le nom de cache est aussi changé
 // pour purger automatiquement l'ancien cache v5 chez tous les utilisateurs.
-const CACHE_NAME = 'sponsor-crm-cache-v7';
+const CACHE_NAME = 'sponsor-crm-cache-v8';
 const urlsToCache = [
   './',
   './index.html',
@@ -22,7 +22,18 @@ const urlsToCache = [
   './assets/js/client-space.js',
   './assets/js/meta-live.js',
   './assets/js/app.js',
-  './assets/js/demo.js'
+  './assets/js/demo.js',
+  './assets/js/security.js',
+  './assets/js/invoice-assets.js',
+  './assets/js/payroll.js',
+  './assets/js/audit.js',
+  './assets/js/backup.js',
+  './assets/js/ext.js',
+  './assets/js/team.js',
+  './assets/js/accounting.js',
+  './assets/js/operations.js',
+  './assets/js/crm.js',
+  './assets/js/control.js'
 ];
 
 self.addEventListener('install', event => {
