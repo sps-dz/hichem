@@ -739,22 +739,79 @@ window.getInvoiceSendContext = function() {
 window.sendInvoiceWhatsApp = function() {
   const c = getInvoiceSendContext();
   if (!c) return showToast('Facture introuvable', 'error');
-  if (!c.phone) return showToast('Numéro WhatsApp absent ou invalide pour ce client (à renseigner dans fiche client)', 'error');
-  window.open(`https://wa.me/${c.phone}?text=${encodeURIComponent(c.message)}`, '_blank');
+  if (!c.phone) return showToast('Numéro WhatsApp absent ou invalide pour ce client (à renseigner dans la fiche client)', 'error');
+  // Ouvre l'application WhatsApp installée (PC / téléphone) avec le message prêt ; WhatsApp Web en secours
+  if (typeof openWhatsApp === 'function') openWhatsApp(c.phone, c.message);
+  else window.open(`https://wa.me/${c.phone}?text=${encodeURIComponent(c.message)}`, '_blank');
   if (typeof logActivity === 'function') logActivity('Facture envoyée (WhatsApp)', `${c.invNumber} — ${c.tx.clientName || ''}`);
-  showToast('WhatsApp ouvert. Pour joindre le fichier : « Télécharger PDF » ou « Envoyer le PDF ».', 'info');
 };
 
+// Image PNG de la facture (Instagram n'accepte pas les PDF dans les messages, mais accepte les images).
+window._invoiceImageBlob = function(c) {
+  const { inner } = buildInvoiceHtml(c.tx);
+  const node = document.createElement('div');
+  node.style.width = '794px';
+  node.innerHTML = inner;
+  return new Promise((resolve, reject) => {
+    html2pdf().set({ html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 } })
+      .from(node).toCanvas().get('canvas')
+      .then(canvas => canvas.toBlob(b => b ? resolve(b) : reject(new Error('image vide')), 'image/png'))
+      .catch(reject);
+  });
+};
+
+// Instagram : la facture est envoyée comme IMAGE (les PDF ne passent pas dans les messages Instagram).
+//  • Téléphone : menu de partage → choisir Instagram.
+//  • PC : l'image est copiée, la conversation s'ouvre, il suffit de faire Ctrl+V puis Entrée.
+//    (si la copie est impossible, l'image est téléchargée à glisser dans la conversation)
 window.sendInvoiceInstagram = function() {
   const c = getInvoiceSendContext();
   if (!c) return showToast('Facture introuvable', 'error');
-  if (!c.ig) return showToast('Compte Instagram absent pour ce client (à renseigner dans fiche client)', 'error');
-  const open = () => window.open(`https://ig.me/m/${c.ig}`, '_blank');
-  if (typeof logActivity === 'function') logActivity('Facture envoyée (Instagram)', `${c.invNumber} — ${c.tx.clientName || ''}`);
-  // Instagram ne permet pas de pré-remplir le message : on le copie, il suffit de le coller dans la conversation.
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(c.message).then(() => { showToast('Message copié : collez-le dans la conversation Instagram', 'success'); open(); }).catch(() => open());
-  } else open();
+  if (!c.ig) return showToast('Compte Instagram absent pour ce client (à renseigner dans la fiche client)', 'error');
+  const dm = `https://ig.me/m/${c.ig}`;
+  const openDm = () => window.open(dm, '_blank');
+  const log = () => { if (typeof logActivity === 'function') logActivity('Facture envoyée (Instagram)', `${c.invNumber} — ${c.tx.clientName || ''}`); };
+  if (typeof html2pdf !== 'function') {            // secours : ancien comportement (texte copié)
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(c.message).then(() => { showToast('Message copié : collez-le dans la conversation Instagram', 'success'); openDm(); }).catch(openDm);
+    else openDm();
+    return log();
+  }
+  const name = `${c.invNumber}.png`;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  const blobP = window._invoiceImageBlob(c);
+  blobP.catch(() => {});
+  showToast("Préparation de l'image de la facture...", 'info');
+  const downloadAndOpen = (blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast(`Image téléchargée (${name}) : glissez-la dans la conversation Instagram`, 'info');
+    openDm(); log();
+  };
+  const fail = (err) => { console.error(err); showToast("Impossible de créer l'image de la facture", 'error'); };
+
+  if (isMobile && navigator.share && navigator.canShare) {
+    blobP.then(blob => {
+      const file = new File([blob], name, { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        return navigator.share({ files: [file], title: `Facture ${c.invNumber}` }).then(log)
+          .catch(err => { if (!err || err.name !== 'AbortError') { console.error(err); showToast('Partage impossible', 'error'); } });
+      }
+      downloadAndOpen(blob);
+    }).catch(fail);
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+    // La copie est lancée tout de suite (geste de l'utilisateur) ; l'image se termine de se générer pendant l'écriture.
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': blobP })]).then(() => {
+      showToast("Image de la facture copiée : dans la conversation Instagram, faites Ctrl+V (Cmd+V sur Mac) puis Entrée", 'success');
+      openDm(); log();
+    }).catch(() => blobP.then(downloadAndOpen).catch(fail));
+  } else {
+    blobP.then(downloadAndOpen).catch(fail);
+  }
 };
 
 // Partage du FICHIER PDF (menu de partage du téléphone : WhatsApp, Instagram, e-mail…).
@@ -1647,7 +1704,7 @@ window.sendWhatsAppReminder = function(clientId) {
     `Pourriez-vous nous confirmer le règlement dès que possible ?\n\n` +
     `Merci de votre confiance !`
   );
-  window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+  window.open(`https://wa.me/${phone}?text=${message}`, '_blank');   // intercepté par messaging.js → application WhatsApp
 };
 
 window.sendInstagramReminder = function(clientId) {
