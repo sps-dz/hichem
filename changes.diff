@@ -1,5 +1,5 @@
 --- a/index.html	2026-07-16 13:51:32.000000000 +0000
-+++ b/index.html	2026-10-02 19:23:14.201722713 +0000
++++ b/index.html	2026-10-02 19:48:08.516062078 +0000
 @@ -725,7 +725,7 @@
        <div
          class="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl w-full max-w-md shadow-2xl fade-in border dark:border-gray-700">
@@ -28,7 +28,7 @@
 +  <script src="assets/js/data-service.js?v=39"></script>
 +  <script src="assets/js/ui-render.js?v=45"></script>
 +  <script src="assets/js/invoice-assets.js?v=1"></script>
-+  <script src="assets/js/ui-handlers.js?v=44"></script>
++  <script src="assets/js/ui-handlers.js?v=45"></script>
 +  <script src="assets/js/payroll.js?v=3"></script>
 +  <script src="assets/js/audit.js?v=1"></script>
 +  <script src="assets/js/backup.js?v=1"></script>
@@ -51,7 +51,7 @@ Only in b/assets/js: audit.js
 Only in b/assets/js: backup.js
 diff -ru a/assets/js/calculations.js b/assets/js/calculations.js
 --- a/assets/js/calculations.js	2026-07-16 13:51:32.000000000 +0000
-+++ b/assets/js/calculations.js	2026-10-02 19:23:14.215274402 +0000
++++ b/assets/js/calculations.js	2026-10-02 19:23:14.000000000 +0000
 @@ -74,14 +74,9 @@
        if (t.status === 'active' || !t.status) { // Include normal past transactions that didn't have 'status'
          const usdtAmt = Number(t.amount || 0);
@@ -105,7 +105,7 @@ diff -ru a/assets/js/calculations.js b/assets/js/calculations.js
  
 diff -ru a/assets/js/client-space.js b/assets/js/client-space.js
 --- a/assets/js/client-space.js	2026-07-16 13:51:32.000000000 +0000
-+++ b/assets/js/client-space.js	2026-10-02 19:23:14.217387234 +0000
++++ b/assets/js/client-space.js	2026-10-02 19:23:14.000000000 +0000
 @@ -264,7 +264,7 @@
      arr.forEach((acc, idx) => {
        const chip = document.createElement('div');
@@ -198,7 +198,7 @@ diff -ru a/assets/js/client-space.js b/assets/js/client-space.js
 Only in b/assets/js: control.js
 diff -ru a/assets/js/core.js b/assets/js/core.js
 --- a/assets/js/core.js	2026-07-16 13:51:32.000000000 +0000
-+++ b/assets/js/core.js	2026-10-02 19:23:14.221112137 +0000
++++ b/assets/js/core.js	2026-10-02 19:23:14.000000000 +0000
 @@ -21,8 +21,13 @@
  
  window.closeAllModals = function () {
@@ -218,7 +218,7 @@ diff -ru a/assets/js/core.js b/assets/js/core.js
 Only in b/assets/js: crm.js
 diff -ru a/assets/js/data-service.js b/assets/js/data-service.js
 --- a/assets/js/data-service.js	2026-07-16 13:51:32.000000000 +0000
-+++ b/assets/js/data-service.js	2026-10-02 19:23:14.224479252 +0000
++++ b/assets/js/data-service.js	2026-10-02 19:23:14.000000000 +0000
 @@ -92,7 +92,9 @@
  window.saveToLocalStorage = function() {
    const sessionData = {
@@ -297,7 +297,7 @@ Only in b/assets/js: ext.js
 Only in b/assets/js: invoice-assets.js
 diff -ru a/assets/js/meta-live.js b/assets/js/meta-live.js
 --- a/assets/js/meta-live.js	2026-07-16 13:51:32.000000000 +0000
-+++ b/assets/js/meta-live.js	2026-10-02 19:23:14.229503116 +0000
++++ b/assets/js/meta-live.js	2026-10-02 19:23:14.000000000 +0000
 @@ -1,6 +1,28 @@
  (() => {
    const LS_TOKEN = 'sponsor_meta_access_token_v1';
@@ -443,7 +443,7 @@ Only in b/assets/js: security.js
 Only in b/assets/js: team.js
 diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
 --- a/assets/js/ui-handlers.js	2026-07-16 13:51:32.000000000 +0000
-+++ b/assets/js/ui-handlers.js	2026-10-02 19:23:14.238980122 +0000
++++ b/assets/js/ui-handlers.js	2026-10-02 19:48:08.514839720 +0000
 @@ -117,6 +117,8 @@
        const el = document.getElementById(id);
        if (el) el.value = '';
@@ -473,7 +473,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
    };
    html2pdf().set(opt).from(element).save().then(() => {
-@@ -338,148 +340,424 @@
+@@ -338,148 +340,520 @@
    });
  };
  
@@ -488,11 +488,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
 -    return;
 -  }
 +// === FACTURE : aperçu direct (sans téléchargement automatique) ===
- 
--  const invNumber = `INV-${String(tx.date || getLocalDateString()).split('-').join('')}-${String(tx.id).slice(-6)}`;
--  const company = 'Hichem Sponsor';
--  const client = tx.clientName || 'Client';
--  const dateLabel = typeof formatDate === 'function' ? formatDate(tx.date) : (tx.date || '');
++
 +// Nombre -> lettres en français (ex: 7000 -> "sept mille")
 +window.numberToFrenchWords = function(num) {
 +  let n = Math.floor(Math.abs(Number(num) || 0));
@@ -557,7 +553,11 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
 +    try { return new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Africa/Algiers' }); }
 +    catch (e) { return ''; }
 +  };
-+
+ 
+-  const invNumber = `INV-${String(tx.date || getLocalDateString()).split('-').join('')}-${String(tx.id).slice(-6)}`;
+-  const company = 'Hichem Sponsor';
+-  const client = tx.clientName || 'Client';
+-  const dateLabel = typeof formatDate === 'function' ? formatDate(tx.date) : (tx.date || '');
 +  const baseDate = tx.date || getLocalDateString();
 +  const legacyInvNumber = `INV-${String(baseDate).split('-').join('')}-${String(tx.id).slice(-6)}`;
 +  // Numérotation : identique à l'ancienne par défaut ; séquentielle (FAC-AAAA-0001) si activée dans Comptabilité > Profil
@@ -755,7 +755,26 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
 +          <div style="font-size:14.5px;color:#34445f;margin-top:2px;">Contact : ${contactLabel}</div>
 +        </div>
 +      </div>
-+
+ 
+-    <!-- Totals -->
+-    <div style="display:flex; justify-content:flex-end;">
+-      <table style="width:300px; border-collapse:collapse;">
+-        <tr>
+-          <td style="padding:12px 16px; font-size:14px; color:#6b7280; text-align:right;">Sous-total:</td>
+-          <td style="padding:12px 16px; font-size:15px; font-weight:600; color:#111827; text-align:right; border-bottom:1px solid #e5e7eb;">${dzd}</td>
+-        </tr>
+-        <tr>
+-          <td style="padding:16px; font-size:18px; font-weight:800; color:#111827; text-align:right;">TOTAL:</td>
+-          <td style="padding:16px; font-size:20px; font-weight:900; color:#3b82f6; text-align:right;">${dzd}</td>
+-        </tr>
+-        ${profit !== null ? `
+-        <!-- Internal Profit Tracking (Optional/Hidden for actual clients) -->
+-        <tr style="opacity:0.3;">
+-          <td style="padding:4px 16px; font-size:10px; color:#9ca3af; text-align:right;">Marge (Interne):</td>
+-          <td style="padding:4px 16px; font-size:10px; color:#9ca3af; text-align:right;">${formatCurrency(profit)}</td>
+-        </tr>
+-        ` : ''}
+-      </table>
 +      <!-- Tableau -->
 +      <div style="margin-top:28px;border:1px solid ${line};border-radius:10px;overflow:hidden;">
 +        <div style="display:flex;background:${navy};color:#fff;font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;">
@@ -804,26 +823,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
 +          </div>
 +        </div>
 +      </div>
- 
--    <!-- Totals -->
--    <div style="display:flex; justify-content:flex-end;">
--      <table style="width:300px; border-collapse:collapse;">
--        <tr>
--          <td style="padding:12px 16px; font-size:14px; color:#6b7280; text-align:right;">Sous-total:</td>
--          <td style="padding:12px 16px; font-size:15px; font-weight:600; color:#111827; text-align:right; border-bottom:1px solid #e5e7eb;">${dzd}</td>
--        </tr>
--        <tr>
--          <td style="padding:16px; font-size:18px; font-weight:800; color:#111827; text-align:right;">TOTAL:</td>
--          <td style="padding:16px; font-size:20px; font-weight:900; color:#3b82f6; text-align:right;">${dzd}</td>
--        </tr>
--        ${profit !== null ? `
--        <!-- Internal Profit Tracking (Optional/Hidden for actual clients) -->
--        <tr style="opacity:0.3;">
--          <td style="padding:4px 16px; font-size:10px; color:#9ca3af; text-align:right;">Marge (Interne):</td>
--          <td style="padding:4px 16px; font-size:10px; color:#9ca3af; text-align:right;">${formatCurrency(profit)}</td>
--        </tr>
--        ` : ''}
--      </table>
++
 +      <!-- Mot de fin + signature -->
 +      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:26px;">
 +        <div>
@@ -863,7 +863,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
 +  </div>`;
 +  return { inner, invNumber };
 +};
-+
+ 
 +// Ouvre l'aperçu de la facture directement à l'écran (aucun téléchargement automatique).
 +window.generateInvoicePdf = function(txId) {
 +  const tx = (appState.transactions || []).find(t => t.id === txId);
@@ -887,6 +887,15 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
 +            <span id="invoicePreviewTitle">Aperçu facture</span>
 +          </div>
 +          <div class="flex flex-wrap gap-2">
++            <button type="button" onclick="sendInvoiceWhatsApp()" class="px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700" title="Ouvre WhatsApp avec le message de la facture prêt à envoyer">
++              <i class="fab fa-whatsapp mr-1"></i> WhatsApp
++            </button>
++            <button type="button" onclick="sendInvoiceInstagram()" class="px-4 py-2 text-white rounded-xl font-bold text-sm hover:opacity-90" style="background:linear-gradient(45deg,#f09433,#dc2743,#bc1888);" title="Copie le message et ouvre la conversation Instagram du client">
++              <i class="fab fa-instagram mr-1"></i> Instagram
++            </button>
++            <button type="button" onclick="shareInvoicePdf()" class="px-4 py-2 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black" title="Partage le fichier PDF (WhatsApp, Instagram, e-mail…)">
++              <i class="fas fa-share-nodes mr-1"></i> Envoyer le PDF
++            </button>
 +            <button type="button" onclick="downloadInvoicePdf()" class="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700">
 +              <i class="fas fa-download mr-1"></i> Télécharger PDF
 +            </button>
@@ -946,6 +955,100 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
 +  frame.contentWindow.print();
 +};
 +
++// === ENVOI DE LA FACTURE AU CLIENT (WhatsApp / Instagram / partage du PDF) ===
++// Contexte : transaction affichée dans l'aperçu + coordonnées du client + message prêt à envoyer.
++window.getInvoiceSendContext = function() {
++  const tx = (appState.transactions || []).find(t => t.id === window._invoicePreviewTxId);
++  if (!tx) return null;
++  const client = (appState.clients || []).find(c => c.id === tx.clientId)
++    || (appState.clients || []).find(c => (c.name || '').trim().toLowerCase() === String(tx.clientName || '').trim().toLowerCase())
++    || null;
++  const { invNumber } = buildInvoiceHtml(tx);
++  const PF = (typeof getCompanyProfile === 'function') ? getCompanyProfile() : { name: 'Hichem Sponsor' };
++  const total = formatCurrency(tx.priceDzd);
++  const endYmd = (typeof getTransactionEndYmd === 'function') ? getTransactionEndYmd(tx) : '';
++  const lines = [
++    `Bonjour ${tx.clientName || (client && client.name) || ''},`,
++    '',
++    `Voici votre facture ${invNumber} — ${tx.offerName || 'Sponsoring Publicitaire'} :`,
++    `• Montant : ${total}`
++  ];
++  if (endYmd) lines.push(`• Période : du ${formatDate(tx.date)} au ${formatDate(endYmd)}`);
++  lines.push(tx.paid ? '• Statut : Payé ✓' : `• Statut : Reste à payer ${total}`);
++  lines.push('', 'Merci de votre confiance !', PF.name || 'Hichem Sponsor');
++  const igRaw = client ? (client.instagram || client.username || (client.social && Array.isArray(client.social.instagram) && client.social.instagram[0]) || '') : '';
++  return {
++    tx, client, invNumber, message: lines.join('\n'),
++    phone: client ? normalizePhoneForWhatsApp(client.phone || client.contact) : '',
++    ig: String(igRaw || '').trim().replace(/^@+/, '').replace(/[^A-Za-z0-9._]/g, '')
++  };
++};
++
++window.sendInvoiceWhatsApp = function() {
++  const c = getInvoiceSendContext();
++  if (!c) return showToast('Facture introuvable', 'error');
++  if (!c.phone) return showToast('Numéro WhatsApp absent ou invalide pour ce client (à renseigner dans fiche client)', 'error');
++  window.open(`https://wa.me/${c.phone}?text=${encodeURIComponent(c.message)}`, '_blank');
++  if (typeof logActivity === 'function') logActivity('Facture envoyée (WhatsApp)', `${c.invNumber} — ${c.tx.clientName || ''}`);
++  showToast('WhatsApp ouvert. Pour joindre le fichier : « Télécharger PDF » ou « Envoyer le PDF ».', 'info');
++};
++
++window.sendInvoiceInstagram = function() {
++  const c = getInvoiceSendContext();
++  if (!c) return showToast('Facture introuvable', 'error');
++  if (!c.ig) return showToast('Compte Instagram absent pour ce client (à renseigner dans fiche client)', 'error');
++  const open = () => window.open(`https://ig.me/m/${c.ig}`, '_blank');
++  if (typeof logActivity === 'function') logActivity('Facture envoyée (Instagram)', `${c.invNumber} — ${c.tx.clientName || ''}`);
++  // Instagram ne permet pas de pré-remplir le message : on le copie, il suffit de le coller dans la conversation.
++  if (navigator.clipboard && navigator.clipboard.writeText) {
++    navigator.clipboard.writeText(c.message).then(() => { showToast('Message copié : collez-le dans la conversation Instagram', 'success'); open(); }).catch(() => open());
++  } else open();
++};
++
++// Partage du FICHIER PDF (menu de partage du téléphone : WhatsApp, Instagram, e-mail…).
++// Si l'appareil ne sait pas partager un fichier, le PDF est téléchargé pour être joint à la main.
++window.shareInvoicePdf = function() {
++  if (typeof html2pdf !== 'function') return showToast('PDF indisponible (librairie non chargée)', 'error');
++  const c = getInvoiceSendContext();
++  if (!c) return showToast('Facture introuvable', 'error');
++  const { inner } = buildInvoiceHtml(c.tx);
++  const node = document.createElement('div');
++  node.style.width = '794px';
++  node.innerHTML = inner;
+   const opt = {
+-    margin: [10, 10],
+-    filename: `${invNumber}.pdf`,
++    margin: 0,
++    filename: `${c.invNumber}.pdf`,
+     image: { type: 'jpeg', quality: 0.98 },
+-    html2canvas: { scale: 2, useCORS: true },
+-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
++    html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
++    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
++    pagebreak: { mode: [] }
+   };
++  showToast('Préparation du PDF...', 'info');
++  html2pdf().set(opt).from(node).toPdf().get('pdf').then(pdf => {
++    while (pdf.getNumberOfPages() > 1) pdf.deletePage(pdf.getNumberOfPages());
++    const blob = pdf.output('blob');
++    const file = new File([blob], `${c.invNumber}.pdf`, { type: 'application/pdf' });
++    if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
++      return navigator.share({ files: [file], title: `Facture ${c.invNumber}`, text: c.message })
++        .then(() => { if (typeof logActivity === 'function') logActivity('Facture partagée (PDF)', `${c.invNumber} — ${c.tx.clientName || ''}`); })
++        .catch(err => { if (!err || err.name !== 'AbortError') { console.error(err); showToast('Partage impossible', 'error'); } });
++    }
++    const url = URL.createObjectURL(blob);
++    const a = document.createElement('a');
++    a.href = url; a.download = `${c.invNumber}.pdf`;
++    document.body.appendChild(a); a.click(); document.body.removeChild(a);
++    setTimeout(() => URL.revokeObjectURL(url), 2000);
++    showToast('Partage direct indisponible sur cet appareil : PDF téléchargé, joignez-le dans WhatsApp / Instagram', 'info');
++  }).catch(err => { console.error(err); showToast('Erreur lors de la génération du PDF', 'error'); });
++};
+ 
+-  showToast('Génération de la facture...', 'info');
+-  html2pdf().set(opt).from(node).save().then(() => {
+-    showToast('Facture générée', 'success');
 +// Téléchargement PDF uniquement quand l'utilisateur clique sur le bouton de l'aperçu.
 +window.downloadInvoicePdf = function() {
 +  if (typeof html2pdf !== 'function') {
@@ -961,22 +1064,15 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
 +  const node = document.createElement('div');
 +  node.style.width = '794px';
 +  node.innerHTML = inner;
- 
-   const opt = {
--    margin: [10, 10],
++
++  const opt = {
 +    margin: 0,
-     filename: `${invNumber}.pdf`,
-     image: { type: 'jpeg', quality: 0.98 },
--    html2canvas: { scale: 2, useCORS: true },
--    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
++    filename: `${invNumber}.pdf`,
++    image: { type: 'jpeg', quality: 0.98 },
 +    html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
 +    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
 +    pagebreak: { mode: [] }
-   };
--
--  showToast('Génération de la facture...', 'info');
--  html2pdf().set(opt).from(node).save().then(() => {
--    showToast('Facture générée', 'success');
++  };
 +  showToast('Génération du PDF...', 'info');
 +  html2pdf().set(opt).from(node).toPdf().get('pdf').then(pdf => {
 +    // La facture tient sur une seule page A4 : on retire toute page vide en trop.
@@ -1016,7 +1112,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
  // === RAPPORT FINANCIER PDF ===
  window.exportFinancialReportPdf = function() {
    if (typeof html2pdf !== 'function') {
-@@ -580,7 +858,7 @@
+@@ -580,7 +954,7 @@
      margin: [10, 10],
      filename: `Rapport_Financier_${toYmd(today)}.pdf`,
      image: { type: 'jpeg', quality: 0.98 },
@@ -1025,7 +1121,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
    };
  
-@@ -648,10 +926,24 @@
+@@ -648,10 +1022,24 @@
    if (typeof renderCurrentTab === 'function') renderCurrentTab();
  };
  
@@ -1050,7 +1146,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
    const ig = client.instagram || (client.social && Array.isArray(client.social.instagram) && client.social.instagram[0]) || client.username || '';
    const fb = (client.social && Array.isArray(client.social.facebook) && client.social.facebook[0]) || '';
    if (document.getElementById('newClientName')) document.getElementById('newClientName').value = client.name || '';
-@@ -780,6 +1072,19 @@
+@@ -780,6 +1168,19 @@
      durationDays = customDuration;
    }
  
@@ -1070,7 +1166,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
      const todoDateStr = document.getElementById('todoDate')?.value || getLocalDateString();
      const adAccountId = document.getElementById('todoAdAccountId')?.value || null;
      
-@@ -809,8 +1114,12 @@
+@@ -809,8 +1210,12 @@
      endDate: endDate,
      createdAt: Date.now(),
      customDurationDays: durationDays,
@@ -1085,7 +1181,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
    };
  
    if (actionMode === 'direct') {
-@@ -915,6 +1224,7 @@
+@@ -915,6 +1320,7 @@
         if (destStatus === 'active') {
           item.status = 'active';
           item.completedAt = Date.now();
@@ -1093,7 +1189,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
           const client = (appState.clients || []).find(c => c.id === item.clientId);
           if (client) {
             client.totalSpent = (client.totalSpent || 0) + (item.priceDzd || 0);
-@@ -925,7 +1235,7 @@
+@@ -925,7 +1331,7 @@
         }
      } else {
         if (!appState.transactions) appState.transactions = [];
@@ -1102,7 +1198,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
         if (destStatus === 'active') {
           newTx.completedAt = Date.now();
           const client = (appState.clients || []).find(c => c.id === item.clientId);
-@@ -1359,11 +1669,11 @@
+@@ -1359,11 +1765,11 @@
        <div class="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 border dark:border-gray-700">
          <i class="fas ${actionIcon(l.action)} mt-1"></i>
          <div class="flex-1 min-w-0">
@@ -1117,7 +1213,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
            <div class="text-[10px] text-gray-400">${new Date(l.ts).toLocaleString('fr-FR', { timeZone: 'Africa/Algiers' })}</div>
          </div>
        </div>
-@@ -1506,7 +1816,7 @@
+@@ -1506,7 +1912,7 @@
          return `
            <div class="p-4 border rounded-2xl bg-gray-50 dark:bg-gray-700 mb-4">
              <h4 class="font-bold text-gray-800 dark:text-white mb-2">
@@ -1126,7 +1222,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
                <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
                  (${absences.length} absence${absences.length > 1 ? 's' : ''})
                </span>
-@@ -1582,77 +1892,7 @@
+@@ -1582,77 +1988,7 @@
    showToast('Absence supprimée', 'success');
  };
  
@@ -1205,7 +1301,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
  
  window.toggleEmployeeActive = function(id) {
    const emp = (appState.employees || []).find(e => e.id === id);
-@@ -1698,7 +1938,7 @@
+@@ -1698,7 +2034,7 @@
    if (!preview) return;
    if (input?.files && input.files[0]) {
      const file = input.files[0];
@@ -1214,7 +1310,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
    }
  };
  
-@@ -1807,8 +2047,11 @@
+@@ -1807,8 +2143,11 @@
        const result = JSON.parse(e.target.result);
        if (typeof result === 'object' && result !== null) {
          // Merge with current state or replace? Replace makes more sense for a backup restore
@@ -1227,7 +1323,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
          });
          if (typeof autoSave === 'function') autoSave();
          if (typeof renderTables === 'function') renderTables();
-@@ -1858,7 +2101,7 @@
+@@ -1858,7 +2197,7 @@
    const adAccountSelect = document.getElementById('editTxAdAccountId');
    if (adAccountSelect) {
        adAccountSelect.innerHTML = '<option value="">-- Aucun compte (Organique) --</option>' + 
@@ -1236,7 +1332,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
        adAccountSelect.value = t.adAccountId || '';
    }
    
-@@ -2196,7 +2439,7 @@
+@@ -2196,7 +2535,7 @@
            <div class="flex-1">
              <div class="flex items-center gap-2 mb-1">
                <i class="fas ${statusIcon}"></i>
@@ -1245,7 +1341,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
                <span class="font-bold text-indigo-600">${s.amount.toLocaleString()} DA</span>
              </div>
              <div class="flex flex-wrap gap-2 mt-2">
-@@ -2292,6 +2535,7 @@
+@@ -2292,6 +2631,7 @@
        priceDzd: sponsor.amount,
        duration: sponsor.offer?.duration || '',
        date: today,
@@ -1253,7 +1349,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
        paid: sponsor.paid,
        offerName: sponsor.offer?.name || 'Offre custom',
        createdAt: Date.now(),
-@@ -2524,7 +2768,7 @@
+@@ -2524,7 +2864,7 @@
  window.exportPerformanceCSV = function() {
    const employees = appState.employees || [];
    const txs = appState.transactions || [];
@@ -1262,7 +1358,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
      ratePerTask: 1700,
      fixedCosts: {
        salary: 40000,
-@@ -2532,9 +2776,10 @@
+@@ -2532,9 +2872,10 @@
        pub: 20000,
        risque: 15000
      }
@@ -1276,7 +1372,7 @@ diff -ru a/assets/js/ui-handlers.js b/assets/js/ui-handlers.js
      if (gain >= 150000) return 5000;
 diff -ru a/assets/js/ui-render.js b/assets/js/ui-render.js
 --- a/assets/js/ui-render.js	2026-07-16 13:51:32.000000000 +0000
-+++ b/assets/js/ui-render.js	2026-10-02 19:23:14.241206396 +0000
++++ b/assets/js/ui-render.js	2026-10-02 19:23:14.000000000 +0000
 @@ -536,7 +536,7 @@
            .slice(0, 5)
            .map(c => `
@@ -1875,7 +1971,7 @@ diff -ru a/assets/js/ui-render.js b/assets/js/ui-render.js
      const ctx = document.getElementById('employeePerformanceChart').getContext('2d');
 diff -ru a/assets/js/utils.js b/assets/js/utils.js
 --- a/assets/js/utils.js	2026-07-16 13:51:32.000000000 +0000
-+++ b/assets/js/utils.js	2026-10-02 19:23:14.242813872 +0000
++++ b/assets/js/utils.js	2026-10-02 19:23:14.000000000 +0000
 @@ -96,7 +96,7 @@
  
    // On garde un historique raisonnable (évite de faire gonfler le document
@@ -1899,7 +1995,7 @@ diff -ru a/assets/js/utils.js b/assets/js/utils.js
  
    // Ajouter au DOM
 --- a/sw.js	2026-07-16 13:51:32.000000000 +0000
-+++ b/sw.js	2026-10-02 19:23:14.279365083 +0000
++++ b/sw.js	2026-10-02 19:23:14.000000000 +0000
 @@ -3,7 +3,7 @@
  // où une ancienne version mise en cache (CSS/JS) s'affichait tant que le
  // cache n'était pas invalidé manuellement. Le nom de cache est aussi changé
