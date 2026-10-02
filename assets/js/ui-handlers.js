@@ -639,6 +639,15 @@ window.generateInvoicePdf = function(txId) {
             <span id="invoicePreviewTitle">Aperçu facture</span>
           </div>
           <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="sendInvoiceWhatsApp()" class="px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700" title="Ouvre WhatsApp avec le message de la facture prêt à envoyer">
+              <i class="fab fa-whatsapp mr-1"></i> WhatsApp
+            </button>
+            <button type="button" onclick="sendInvoiceInstagram()" class="px-4 py-2 text-white rounded-xl font-bold text-sm hover:opacity-90" style="background:linear-gradient(45deg,#f09433,#dc2743,#bc1888);" title="Copie le message et ouvre la conversation Instagram du client">
+              <i class="fab fa-instagram mr-1"></i> Instagram
+            </button>
+            <button type="button" onclick="shareInvoicePdf()" class="px-4 py-2 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black" title="Partage le fichier PDF (WhatsApp, Instagram, e-mail…)">
+              <i class="fas fa-share-nodes mr-1"></i> Envoyer le PDF
+            </button>
             <button type="button" onclick="downloadInvoicePdf()" class="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700">
               <i class="fas fa-download mr-1"></i> Télécharger PDF
             </button>
@@ -696,6 +705,93 @@ window.printInvoicePreview = function() {
   if (!frame || !frame.contentWindow) return;
   frame.contentWindow.focus();
   frame.contentWindow.print();
+};
+
+// === ENVOI DE LA FACTURE AU CLIENT (WhatsApp / Instagram / partage du PDF) ===
+// Contexte : transaction affichée dans l'aperçu + coordonnées du client + message prêt à envoyer.
+window.getInvoiceSendContext = function() {
+  const tx = (appState.transactions || []).find(t => t.id === window._invoicePreviewTxId);
+  if (!tx) return null;
+  const client = (appState.clients || []).find(c => c.id === tx.clientId)
+    || (appState.clients || []).find(c => (c.name || '').trim().toLowerCase() === String(tx.clientName || '').trim().toLowerCase())
+    || null;
+  const { invNumber } = buildInvoiceHtml(tx);
+  const PF = (typeof getCompanyProfile === 'function') ? getCompanyProfile() : { name: 'Hichem Sponsor' };
+  const total = formatCurrency(tx.priceDzd);
+  const endYmd = (typeof getTransactionEndYmd === 'function') ? getTransactionEndYmd(tx) : '';
+  const lines = [
+    `Bonjour ${tx.clientName || (client && client.name) || ''},`,
+    '',
+    `Voici votre facture ${invNumber} — ${tx.offerName || 'Sponsoring Publicitaire'} :`,
+    `• Montant : ${total}`
+  ];
+  if (endYmd) lines.push(`• Période : du ${formatDate(tx.date)} au ${formatDate(endYmd)}`);
+  lines.push(tx.paid ? '• Statut : Payé ✓' : `• Statut : Reste à payer ${total}`);
+  lines.push('', 'Merci de votre confiance !', PF.name || 'Hichem Sponsor');
+  const igRaw = client ? (client.instagram || client.username || (client.social && Array.isArray(client.social.instagram) && client.social.instagram[0]) || '') : '';
+  return {
+    tx, client, invNumber, message: lines.join('\n'),
+    phone: client ? normalizePhoneForWhatsApp(client.phone || client.contact) : '',
+    ig: String(igRaw || '').trim().replace(/^@+/, '').replace(/[^A-Za-z0-9._]/g, '')
+  };
+};
+
+window.sendInvoiceWhatsApp = function() {
+  const c = getInvoiceSendContext();
+  if (!c) return showToast('Facture introuvable', 'error');
+  if (!c.phone) return showToast('Numéro WhatsApp absent ou invalide pour ce client (à renseigner dans fiche client)', 'error');
+  window.open(`https://wa.me/${c.phone}?text=${encodeURIComponent(c.message)}`, '_blank');
+  if (typeof logActivity === 'function') logActivity('Facture envoyée (WhatsApp)', `${c.invNumber} — ${c.tx.clientName || ''}`);
+  showToast('WhatsApp ouvert. Pour joindre le fichier : « Télécharger PDF » ou « Envoyer le PDF ».', 'info');
+};
+
+window.sendInvoiceInstagram = function() {
+  const c = getInvoiceSendContext();
+  if (!c) return showToast('Facture introuvable', 'error');
+  if (!c.ig) return showToast('Compte Instagram absent pour ce client (à renseigner dans fiche client)', 'error');
+  const open = () => window.open(`https://ig.me/m/${c.ig}`, '_blank');
+  if (typeof logActivity === 'function') logActivity('Facture envoyée (Instagram)', `${c.invNumber} — ${c.tx.clientName || ''}`);
+  // Instagram ne permet pas de pré-remplir le message : on le copie, il suffit de le coller dans la conversation.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(c.message).then(() => { showToast('Message copié : collez-le dans la conversation Instagram', 'success'); open(); }).catch(() => open());
+  } else open();
+};
+
+// Partage du FICHIER PDF (menu de partage du téléphone : WhatsApp, Instagram, e-mail…).
+// Si l'appareil ne sait pas partager un fichier, le PDF est téléchargé pour être joint à la main.
+window.shareInvoicePdf = function() {
+  if (typeof html2pdf !== 'function') return showToast('PDF indisponible (librairie non chargée)', 'error');
+  const c = getInvoiceSendContext();
+  if (!c) return showToast('Facture introuvable', 'error');
+  const { inner } = buildInvoiceHtml(c.tx);
+  const node = document.createElement('div');
+  node.style.width = '794px';
+  node.innerHTML = inner;
+  const opt = {
+    margin: 0,
+    filename: `${c.invNumber}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: [] }
+  };
+  showToast('Préparation du PDF...', 'info');
+  html2pdf().set(opt).from(node).toPdf().get('pdf').then(pdf => {
+    while (pdf.getNumberOfPages() > 1) pdf.deletePage(pdf.getNumberOfPages());
+    const blob = pdf.output('blob');
+    const file = new File([blob], `${c.invNumber}.pdf`, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+      return navigator.share({ files: [file], title: `Facture ${c.invNumber}`, text: c.message })
+        .then(() => { if (typeof logActivity === 'function') logActivity('Facture partagée (PDF)', `${c.invNumber} — ${c.tx.clientName || ''}`); })
+        .catch(err => { if (!err || err.name !== 'AbortError') { console.error(err); showToast('Partage impossible', 'error'); } });
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${c.invNumber}.pdf`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast('Partage direct indisponible sur cet appareil : PDF téléchargé, joignez-le dans WhatsApp / Instagram', 'info');
+  }).catch(err => { console.error(err); showToast('Erreur lors de la génération du PDF', 'error'); });
 };
 
 // Téléchargement PDF uniquement quand l'utilisateur clique sur le bouton de l'aperçu.
