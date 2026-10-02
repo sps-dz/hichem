@@ -47,7 +47,7 @@
   }
   function collect() {
     var out = [], today = X.today(), admin = X.isAdmin();
-    function add(level, icon, title, detail, tab, n) { out.push({ level: level, icon: icon, title: title, detail: detail, tab: tab, n: n || 1 }); }
+    function add(level, icon, title, detail, tab, n, action) { out.push({ level: level, icon: icon, title: title, detail: detail, tab: tab, n: n || 1, action: action || '' }); }
     try {
       if (window.OpsDebtors) {
         var d = OpsDebtors(), old = d.filter(function (x) { return x.bucket === 2; }), late = d.filter(function (x) { return x.promiseLate; }), fu = d.filter(function (x) { return x.meta.nextFollowUp && x.meta.nextFollowUp <= today; });
@@ -64,6 +64,7 @@
       if (admin && typeof b.usdt === 'number' && b.usdt < 150) add('warn', 'fa-coins', 'Stock USDT bas', X.usd(b.usdt) + ' restant', 'achats');
       var th = Number(S.get('adThreshold', 20)), lowAds = (appState.adAccounts || []).filter(function (a) { return a && Number(a.balance || 0) < th; });
       if (lowAds.length) add('warn', 'fa-rectangle-ad', lowAds.length + ' compte(s) pub à solde bas (< ' + th + ' $)', lowAds.map(function (a) { return a.name; }).slice(0, 3).join(', '), 'ad-accounts', lowAds.length);
+      if (window.InvoiceFlow) { var pinv = InvoiceFlow.pending(); if (pinv.length) add('danger', 'fa-file-invoice', pinv.length + ' facture(s) obligatoire(s) à envoyer', pinv.map(function (t) { return t.clientName; }).slice(0, 3).join(', '), 'history', pinv.length, 'invoices'); }
       var unread = (appState.clientRequests || []).filter(function (r) { return r && !r.read; }).length;
       if (unread) add('info', 'fa-inbox', unread + ' demande(s) client non lue(s)', '', 'requests', unread);
       var pros = S.list('prospects').filter(function (p) { return p.nextFollowUp && p.nextFollowUp <= today && p.stage !== 'won' && p.stage !== 'lost'; });
@@ -108,7 +109,7 @@
   function renderPanel(el, list) {
     var col = { danger: 'bg-red-50 border-red-200 text-red-700', warn: 'bg-amber-50 border-amber-200 text-amber-700', info: 'bg-blue-50 border-blue-200 text-blue-700' };
     el.querySelector('#notifList').innerHTML = list.length ? list.map(function (a) {
-      return '<button onclick="notifGo(\'' + X.js(a.tab) + '\')" class="w-full text-left flex items-start gap-3 p-3 rounded-2xl border ' + col[a.level] + ' hover:shadow transition-all mb-2"><i class="fas ' + a.icon + ' mt-1"></i><div class="flex-1 min-w-0"><div class="font-bold text-sm">' + E(a.title) + '</div>' + (a.detail ? '<div class="text-xs opacity-80 truncate">' + E(a.detail) + '</div>' : '') + '</div><i class="fas fa-chevron-right text-xs mt-1 opacity-60"></i></button>';
+      return '<button onclick="notifGo(\'' + X.js(a.tab) + '\',\'' + X.js(a.action || '') + '\')" class="w-full text-left flex items-start gap-3 p-3 rounded-2xl border ' + col[a.level] + ' hover:shadow transition-all mb-2"><i class="fas ' + a.icon + ' mt-1"></i><div class="flex-1 min-w-0"><div class="font-bold text-sm">' + E(a.title) + '</div>' + (a.detail ? '<div class="text-xs opacity-80 truncate">' + E(a.detail) + '</div>' : '') + '</div><i class="fas fa-chevron-right text-xs mt-1 opacity-60"></i></button>';
     }).join('') : '<div class="text-center py-10 text-gray-400"><i class="fas fa-circle-check text-4xl text-green-400 mb-3"></i><p class="font-bold">Tout est à jour 🎉</p></div>';
   }
   window.openNotifications = function () {
@@ -117,7 +118,7 @@
     el.innerHTML = '<div class="bg-white dark:bg-gray-800 w-full max-w-md h-full shadow-2xl flex flex-col border-l dark:border-gray-700"><div class="flex items-center justify-between p-5 border-b dark:border-gray-700"><h3 class="text-xl font-bold text-gray-800 dark:text-white"><i class="fas fa-bell text-indigo-600 mr-2"></i>Notifications</h3><button onclick="document.getElementById(\'notifPanel\').remove()" class="text-3xl text-gray-400 hover:text-gray-600 leading-none">×</button></div><div id="notifList" class="p-4 overflow-y-auto flex-1"></div></div>';
     el.addEventListener('click', function (e) { if (e.target === el) el.remove(); }); document.body.appendChild(el); renderPanel(el, collect());
   };
-  window.notifGo = function (tab) { var p = document.getElementById('notifPanel'); if (p) p.remove(); if (typeof showTab === 'function') showTab(tab); };
+  window.notifGo = function (tab, action) { var p = document.getElementById('notifPanel'); if (p) p.remove(); if (action === 'invoices' && typeof openPendingInvoices === 'function') return openPendingInvoices(); if (typeof showTab === 'function') showTab(tab); };
 
   document.addEventListener('ext:rendered', refresh);
   setInterval(refresh, 60000);

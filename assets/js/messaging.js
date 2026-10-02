@@ -107,5 +107,25 @@
     } catch (err) {}
   }, true);
 
+  // --- Instagram : lien de DISCUSSION (https://www.instagram.com/direct/t/102963774431486/) ---
+  // Le lien « ig.me/m/pseudo » provoque une erreur chez Instagram : on utilise le lien de discussion enregistré
+  // sur la fiche client, sinon la page du profil (bouton « Message »).
+  window.normalizeInstagramThread = function (u) {
+    var m = String(u || '').trim().match(/^(?:https?:\/\/)?(?:www\.)?instagram\.com\/direct\/t\/(\d+)/i);
+    return m ? 'https://www.instagram.com/direct/t/' + m[1] + '/' : '';
+  };
+  window.isInstagramThreadUrl = function (u) { return !!window.normalizeInstagramThread(u); };
+  window.getInstagramHandle = function (client) {
+    if (!client) return '';
+    var raw = client.instagram || client.username || (client.social && Array.isArray(client.social.instagram) && client.social.instagram[0]) || '';
+    return String(raw || '').trim().replace(/^@+/, '').replace(/[^A-Za-z0-9._]/g, '');
+  };
+  window.getInstagramChatUrl = function (client) {
+    var t = window.normalizeInstagramThread(client && client.instagramDm);
+    if (t) return t;
+    var h = window.getInstagramHandle(client);
+    return h ? 'https://www.instagram.com/' + h + '/' : '';
+  };
+
   window.MessagingCore = { parseWaUrl: parseWaUrl, appUrl: appUrl, webUrl: webUrl };
 })();

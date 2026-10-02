@@ -124,10 +124,10 @@
   window.getInvoiceNumber = function (tx, legacyNumber) {
     try {
       var P = getCompanyProfile();
+      if (tx && tx.invoiceNo) return tx.invoiceNo;                    // numéro déjà attribué : il ne change plus
       if (P.invoiceNumbering !== 'sequential' || !tx) return legacyNumber;
-      if (tx.invoiceNo) return tx.invoiceNo;
       var year = String(tx.date || X.today()).slice(0, 4), prefix = 'FAC-' + year + '-', max = 0;
-      (appState.transactions || []).forEach(function (t) {
+      (appState.transactions || []).concat(appState.todoTransactions || []).forEach(function (t) {
         if (t && t.invoiceNo && String(t.invoiceNo).indexOf(prefix) === 0) { var n = parseInt(String(t.invoiceNo).slice(prefix.length), 10); if (n > max) max = n; }
       });
       tx.invoiceNo = prefix + String(max + 1).padStart(4, '0');

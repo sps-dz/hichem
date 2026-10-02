@@ -113,7 +113,7 @@ window.closeModal = function(modalId) {
     // Fix: reset le formulaire + l'état d'édition à chaque fermeture (save, annuler, X)
     // pour éviter que les anciennes valeurs / l'édition en cours ne polluent le prochain ajout.
     window.editingClientId = null;
-    ['newClientName', 'newClientPhone', 'newClientInstagram', 'newClientFacebook', 'newClientNotes'].forEach(id => {
+    ['newClientName', 'newClientPhone', 'newClientInstagram', 'newClientInstagramDm', 'newClientFacebook', 'newClientNotes'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -398,6 +398,11 @@ window.amountToFrenchDinars = function(amount) {
   return `${words} ${unit}`;
 };
 
+// Vente concernée par la facture : transaction validée ou tâche To-Do (facture envoyée avant validation)
+window.findInvoiceTx = function(id) {
+  return (appState.transactions || []).find(t => t.id === id) || (appState.todoTransactions || []).find(t => t.id === id) || null;
+};
+
 window.buildInvoiceHtml = function(tx) {
   const esc = (v) => String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -618,7 +623,7 @@ window.buildInvoiceHtml = function(tx) {
 
 // Ouvre l'aperçu de la facture directement à l'écran (aucun téléchargement automatique).
 window.generateInvoicePdf = function(txId) {
-  const tx = (appState.transactions || []).find(t => t.id === txId);
+  const tx = findInvoiceTx(txId);
   if (!tx) {
     showToast('Transaction introuvable', 'error');
     return;
@@ -710,7 +715,7 @@ window.printInvoicePreview = function() {
 // === ENVOI DE LA FACTURE AU CLIENT (WhatsApp / Instagram / partage du PDF) ===
 // Contexte : transaction affichée dans l'aperçu + coordonnées du client + message prêt à envoyer.
 window.getInvoiceSendContext = function() {
-  const tx = (appState.transactions || []).find(t => t.id === window._invoicePreviewTxId);
+  const tx = findInvoiceTx(window._invoicePreviewTxId);
   if (!tx) return null;
   const client = (appState.clients || []).find(c => c.id === tx.clientId)
     || (appState.clients || []).find(c => (c.name || '').trim().toLowerCase() === String(tx.clientName || '').trim().toLowerCase())
@@ -744,6 +749,7 @@ window.sendInvoiceWhatsApp = function() {
   if (typeof openWhatsApp === 'function') openWhatsApp(c.phone, c.message);
   else window.open(`https://wa.me/${c.phone}?text=${encodeURIComponent(c.message)}`, '_blank');
   if (typeof logActivity === 'function') logActivity('Facture envoyée (WhatsApp)', `${c.invNumber} — ${c.tx.clientName || ''}`);
+  if (typeof markInvoiceSent === 'function') markInvoiceSent(c.tx.id, 'whatsapp');
 };
 
 // Image PNG de la facture (Instagram n'accepte pas les PDF dans les messages, mais accepte les images).
@@ -760,21 +766,62 @@ window._invoiceImageBlob = function(c) {
   });
 };
 
+// Fenêtre « Lien de la discussion Instagram » : demandé une seule fois par client, puis enregistré sur sa fiche.
+window.askInstagramThread = function(client, onContinue) {
+  const old = document.getElementById('instagramThreadDialog'); if (old) old.remove();
+  const el = document.createElement('div');
+  el.id = 'instagramThreadDialog';
+  el.className = 'fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-3';
+  el.style.zIndex = '9990';
+  const esc = (v) => (typeof escapeHtml === 'function' ? escapeHtml(v) : String(v == null ? '' : v));
+  el.innerHTML = `
+    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-md p-6 border dark:border-gray-700">
+      <h3 class="text-lg font-bold text-gray-800 dark:text-white mb-1"><i class="fab fa-instagram text-pink-600 mr-2"></i>Discussion Instagram de ${esc(client.name || 'ce client')}</h3>
+      <p class="text-sm text-gray-500 mb-3">Ouvrez la discussion avec ce client sur Instagram, copiez l'adresse dans la barre du navigateur et collez-la ici. Elle ressemble à <b>https://www.instagram.com/direct/t/102963774431486/</b>. Elle sera enregistrée sur sa fiche.</p>
+      <input id="igThreadInput" type="text" placeholder="https://www.instagram.com/direct/t/…" class="w-full p-3 border dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 dark:text-white text-sm mb-4">
+      <div class="flex flex-col gap-2">
+        <button type="button" id="igThreadSave" class="px-4 py-3 rounded-xl font-bold bg-pink-600 hover:bg-pink-700 text-white">Enregistrer et envoyer</button>
+        <button type="button" id="igThreadProfile" class="px-4 py-2 rounded-xl font-bold text-sm text-gray-600 dark:text-gray-300 border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">Ouvrir le profil à la place</button>
+        <button type="button" id="igThreadCancel" class="px-4 py-2 rounded-xl text-sm text-gray-400 hover:text-gray-600">Annuler</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  const close = () => el.remove();
+  el.querySelector('#igThreadSave').onclick = () => {
+    const dm = (typeof normalizeInstagramThread === 'function') ? normalizeInstagramThread(el.querySelector('#igThreadInput').value) : '';
+    if (!dm) return showToast('Lien invalide : il doit ressembler à https://www.instagram.com/direct/t/102963774431486/', 'error');
+    client.instagramDm = dm; client.updatedAt = Date.now();
+    if (typeof autoSave === 'function') autoSave();
+    close(); onContinue();
+  };
+  el.querySelector('#igThreadProfile').onclick = () => { close(); onContinue(); };
+  el.querySelector('#igThreadCancel').onclick = close;
+  el.querySelector('#igThreadInput').focus();
+};
+
 // Instagram : la facture est envoyée comme IMAGE (les PDF ne passent pas dans les messages Instagram).
 //  • Téléphone : menu de partage → choisir Instagram.
-//  • PC : l'image est copiée, la conversation s'ouvre, il suffit de faire Ctrl+V puis Entrée.
-//    (si la copie est impossible, l'image est téléchargée à glisser dans la conversation)
-window.sendInvoiceInstagram = function() {
+//  • PC : l'image est copiée, la conversation du client s'ouvre (lien de discussion enregistré), il suffit
+//    de faire Ctrl+V puis Entrée. Sans lien enregistré, le lien est demandé une fois, ou le profil est ouvert.
+window.sendInvoiceInstagram = function(opts) {
   const c = getInvoiceSendContext();
   if (!c) return showToast('Facture introuvable', 'error');
-  if (!c.ig) return showToast('Compte Instagram absent pour ce client (à renseigner dans la fiche client)', 'error');
-  const dm = `https://ig.me/m/${c.ig}`;
-  const openDm = () => window.open(dm, '_blank');
-  const log = () => { if (typeof logActivity === 'function') logActivity('Facture envoyée (Instagram)', `${c.invNumber} — ${c.tx.clientName || ''}`); };
-  if (typeof html2pdf !== 'function') {            // secours : ancien comportement (texte copié)
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(c.message).then(() => { showToast('Message copié : collez-le dans la conversation Instagram', 'success'); openDm(); }).catch(openDm);
-    else openDm();
-    return log();
+  const chatUrl = (typeof getInstagramChatUrl === 'function') ? getInstagramChatUrl(c.client || {}) : (c.ig ? `https://www.instagram.com/${c.ig}/` : '');
+  if (!chatUrl) return showToast('Compte Instagram ou lien de discussion absent pour ce client (à renseigner dans la fiche client)', 'error');
+  const hasThread = !!(c.client && typeof normalizeInstagramThread === 'function' && normalizeInstagramThread(c.client.instagramDm));
+  if (!hasThread && c.client && !(opts && opts.noAsk)) {
+    return askInstagramThread(c.client, () => window.sendInvoiceInstagram({ noAsk: true }));
+  }
+  const openChat = () => window.open(chatUrl, '_blank');
+  const profileHint = hasThread ? '' : ' (profil ouvert : cliquez sur « Message »)';
+  const done = () => {
+    if (typeof logActivity === 'function') logActivity('Facture envoyée (Instagram)', `${c.invNumber} — ${c.tx.clientName || ''}`);
+    if (typeof markInvoiceSent === 'function') markInvoiceSent(c.tx.id, 'instagram');
+  };
+  if (typeof html2pdf !== 'function') {            // secours : message copié
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(c.message).then(() => { showToast('Message copié : collez-le dans la conversation Instagram' + profileHint, 'success'); openChat(); }).catch(openChat);
+    else openChat();
+    return done();
   }
   const name = `${c.invNumber}.png`;
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
@@ -787,8 +834,8 @@ window.sendInvoiceInstagram = function() {
     a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    showToast(`Image téléchargée (${name}) : glissez-la dans la conversation Instagram`, 'info');
-    openDm(); log();
+    showToast(`Image téléchargée (${name}) : glissez-la dans la conversation Instagram` + profileHint, 'info');
+    openChat(); done();
   };
   const fail = (err) => { console.error(err); showToast("Impossible de créer l'image de la facture", 'error'); };
 
@@ -796,7 +843,7 @@ window.sendInvoiceInstagram = function() {
     blobP.then(blob => {
       const file = new File([blob], name, { type: 'image/png' });
       if (navigator.canShare({ files: [file] })) {
-        return navigator.share({ files: [file], title: `Facture ${c.invNumber}` }).then(log)
+        return navigator.share({ files: [file], title: `Facture ${c.invNumber}` }).then(done)
           .catch(err => { if (!err || err.name !== 'AbortError') { console.error(err); showToast('Partage impossible', 'error'); } });
       }
       downloadAndOpen(blob);
@@ -806,8 +853,8 @@ window.sendInvoiceInstagram = function() {
   if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
     // La copie est lancée tout de suite (geste de l'utilisateur) ; l'image se termine de se générer pendant l'écriture.
     navigator.clipboard.write([new ClipboardItem({ 'image/png': blobP })]).then(() => {
-      showToast("Image de la facture copiée : dans la conversation Instagram, faites Ctrl+V (Cmd+V sur Mac) puis Entrée", 'success');
-      openDm(); log();
+      showToast('Image de la facture copiée : dans la conversation Instagram, faites Ctrl+V (Cmd+V sur Mac) puis Entrée' + profileHint, 'success');
+      openChat(); done();
     }).catch(() => blobP.then(downloadAndOpen).catch(fail));
   } else {
     blobP.then(downloadAndOpen).catch(fail);
@@ -839,7 +886,7 @@ window.shareInvoicePdf = function() {
     const file = new File([blob], `${c.invNumber}.pdf`, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
       return navigator.share({ files: [file], title: `Facture ${c.invNumber}`, text: c.message })
-        .then(() => { if (typeof logActivity === 'function') logActivity('Facture partagée (PDF)', `${c.invNumber} — ${c.tx.clientName || ''}`); })
+        .then(() => { if (typeof logActivity === 'function') logActivity('Facture partagée (PDF)', `${c.invNumber} — ${c.tx.clientName || ''}`); if (typeof markInvoiceSent === 'function') markInvoiceSent(c.tx.id, 'pdf'); })
         .catch(err => { if (!err || err.name !== 'AbortError') { console.error(err); showToast('Partage impossible', 'error'); } });
     }
     const url = URL.createObjectURL(blob);
@@ -857,7 +904,7 @@ window.downloadInvoicePdf = function() {
     showToast('PDF indisponible (librairie non chargée)', 'error');
     return;
   }
-  const tx = (appState.transactions || []).find(t => t.id === window._invoicePreviewTxId);
+  const tx = findInvoiceTx(window._invoicePreviewTxId);
   if (!tx) {
     showToast('Transaction introuvable', 'error');
     return;
@@ -1029,6 +1076,9 @@ window.addClient = function() {
   const name = document.getElementById('newClientName')?.value?.trim();
   const phone = document.getElementById('newClientPhone')?.value?.trim();
   const instagram = document.getElementById('newClientInstagram')?.value?.trim();
+  const instagramDmRaw = document.getElementById('newClientInstagramDm')?.value?.trim() || '';
+  const instagramDm = instagramDmRaw ? ((typeof normalizeInstagramThread === 'function') ? normalizeInstagramThread(instagramDmRaw) : instagramDmRaw) : '';
+  if (instagramDmRaw && !instagramDm) return showToast('Lien de discussion Instagram invalide (attendu : https://www.instagram.com/direct/t/…)', 'error');
   const facebook = document.getElementById('newClientFacebook')?.value?.trim();
   const notes = document.getElementById('newClientNotes')?.value?.trim();
 
@@ -1045,6 +1095,7 @@ window.addClient = function() {
     client.contact = phone || instagram || facebook || '';
     client.notes = notes || '';
     client.username = igHandle || '';
+    client.instagramDm = instagramDm;
     client.social = { instagram: igHandle ? [igHandle] : [], facebook: facebook ? [facebook.trim()] : [] };
     client.updatedAt = Date.now();
     window.editingClientId = null;
@@ -1059,6 +1110,7 @@ window.addClient = function() {
       name,
       phone: phone || '',
       instagram: igHandle || '',
+      instagramDm: instagramDm,
       contact: phone || instagram || facebook || '',
       notes: notes || '',
       totalSpent: 0,
@@ -1082,7 +1134,7 @@ window.addClient = function() {
 // Ouvre le formulaire en mode CRÉATION : toujours vierge, jamais lié à un client modifié avant.
 window.openNewClientModal = function() {
   window.editingClientId = null;
-  ['newClientName', 'newClientPhone', 'newClientInstagram', 'newClientFacebook', 'newClientNotes'].forEach(id => {
+  ['newClientName', 'newClientPhone', 'newClientInstagram', 'newClientInstagramDm', 'newClientFacebook', 'newClientNotes'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -1102,6 +1154,7 @@ window.editClient = function(id) {
   if (document.getElementById('newClientName')) document.getElementById('newClientName').value = client.name || '';
   if (document.getElementById('newClientPhone')) document.getElementById('newClientPhone').value = client.phone || '';
   if (document.getElementById('newClientInstagram')) document.getElementById('newClientInstagram').value = ig || '';
+  if (document.getElementById('newClientInstagramDm')) document.getElementById('newClientInstagramDm').value = client.instagramDm || '';
   if (document.getElementById('newClientFacebook')) document.getElementById('newClientFacebook').value = fb || '';
   if (document.getElementById('newClientNotes')) document.getElementById('newClientNotes').value = client.notes || '';
   openModal('clientModal');
@@ -1285,6 +1338,8 @@ window.handleNewTodoSubmit = function(actionMode, event) {
     if (typeof autoSave === 'function') autoSave();
     showToast('Sponsor validé (direct)', 'success');
     if (typeof showTab === 'function') showTab('history');
+    // Propose (ou impose, selon l'employé) l'envoi de la facture au client
+    if (typeof promptInvoiceSend === 'function') promptInvoiceSend(tx.id, launchedBy);
     return;
   }
 
@@ -1720,17 +1775,18 @@ window.sendInstagramReminder = function(clientId) {
     `C'est Hichem Sponsor. Sauf erreur de notre part, il reste un montant impayé de ${formatCurrency(client.unpaid)} concernant vos dernières transactions.\n\n` +
     `Pourriez-vous nous confirmer le règlement dès que possible ?\n\n` +
     `Merci de votre confiance !`;
+  const chatUrl = (typeof getInstagramChatUrl === 'function') ? getInstagramChatUrl(client) : `https://www.instagram.com/${igHandle}/`;
     
   if (navigator.clipboard) {
     navigator.clipboard.writeText(message).then(() => {
       showToast('Message copié dans le presse-papier !', 'success');
-      window.open(`https://ig.me/m/${igHandle}`, '_blank');
+      window.open(chatUrl, '_blank');
     }).catch(err => {
       console.error('Erreur copie presse-papier:', err);
-      window.open(`https://ig.me/m/${igHandle}`, '_blank');
+      window.open(chatUrl, '_blank');
     });
   } else {
-    window.open(`https://ig.me/m/${igHandle}`, '_blank');
+    window.open(chatUrl, '_blank');
   }
 };
 

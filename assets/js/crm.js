@@ -105,11 +105,15 @@
       '<div class="p-5 overflow-y-auto space-y-5"><div class="grid grid-cols-2 md:grid-cols-4 gap-3">' + X.kpi('Chiffre d\'affaires', X.fmt(s.rev), '', 'fa-sack-dollar') + X.kpi('Marge', X.fmt(s.margin), 'text-green-600', 'fa-chart-line') + X.kpi('Campagnes', String(s.n), '', 'fa-bullhorn') + X.kpi('Dette', X.fmt(s.debt), s.debt ? 'text-red-600' : 'text-green-600', 'fa-user-clock') + '</div>' +
       '<div class="flex flex-wrap gap-2">' + X.btn('WhatsApp', 'crmProfileWa(\'' + cid + '\')', 'bg-green-600 hover:bg-green-700 text-white', 'fa-whatsapp') + X.btn('Relevé de compte', 'crmProfileStatement(\'' + cid + '\')', null, 'fa-file-lines') + X.btn('Nouvelle To-Do', 'crmProfileTodo(\'' + cid + '\')', 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200', 'fa-list-check') + X.btn('Dette / plafond', 'document.getElementById(\'clientProfileModal\').remove();opsDebtForm(\'' + cid + '\')', 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200', 'fa-user-clock') + '</div>' +
       '<div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="' + l + '">Source d\'acquisition</label><select id="cp-src" class="' + i + '">' + srcOpts(m.source) + '</select></div><div><label class="' + l + '">Étiquettes (séparées par des virgules)</label><input id="cp-tags" value="' + E((m.tags || []).join(', ')) + '" placeholder="VIP, mauvais payeur…" class="' + i + '"></div></div>' +
+      '<div><label class="' + l + '">Lien de la discussion Instagram</label><input id="cp-dm" value="' + E(c.instagramDm || '') + '" placeholder="https://www.instagram.com/direct/t/102963774431486/" class="' + i + '"></div>' +
       '<div><label class="' + l + '">Notes internes</label><textarea id="cp-notes" rows="3" class="' + i + '">' + E(m.notes || '') + '</textarea></div>' + X.btn('Enregistrer la fiche', 'crmProfileSave(\'' + cid + '\')', null, 'fa-check') +
       '<div><h4 class="font-bold text-gray-800 dark:text-white mb-1">Historique (15 dernières opérations)</h4>' + tl + '</div></div></div>';
     el.addEventListener('click', function (e) { if (e.target === el) el.remove(); }); document.body.appendChild(el);
   };
   window.crmProfileSave = function (id) {
+    var dmRaw = val('cp-dm').trim(), cl = X.find(appState.clients, id);
+    if (dmRaw) { var dm = (typeof normalizeInstagramThread === 'function') ? normalizeInstagramThread(dmRaw) : ''; if (!dm) return X.toast('Lien Instagram invalide (attendu : https://www.instagram.com/direct/t/…)', 'error'); if (cl) { cl.instagramDm = dm; cl.updatedAt = Date.now(); } }
+    else if (cl && cl.instagramDm) { cl.instagramDm = ''; cl.updatedAt = Date.now(); }
     var tags = val('cp-tags').split(',').map(function (t) { return t.trim(); }).filter(Boolean).slice(0, 12);
     X.setMeta(id, { source: val('cp-src'), tags: tags, notes: val('cp-notes').trim() }); X.log('Fiche client modifiée', X.clientName(id)); X.toast('Fiche enregistrée', 'success'); var el = document.getElementById('clientProfileModal'); if (el) el.remove(); X.rerender();
   };
