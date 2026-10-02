@@ -21,8 +21,13 @@ window.forceAdminView = function () {
 
 window.closeAllModals = function () {
   document.querySelectorAll('[id$="Modal"]').forEach(modal => {
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
+    // Passe par closeModal() pour que le formulaire client soit réinitialisé aussi avec Échap
+    if (typeof window.closeModal === 'function') {
+      window.closeModal(modal.id);
+    } else {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
   });
   document.body.style.overflow = 'auto';
 };

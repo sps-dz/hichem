@@ -536,7 +536,7 @@ window.renderDashboard = function(container) {
           .slice(0, 5)
           .map(c => `
             <div class="dash-debt-row">
-              <div class="dash-debt-row-name">${c.name || 'Client'}</div>
+              <div class="dash-debt-row-name">${escapeHtml(c.name) || 'Client'}</div>
               <div class="dash-debt-row-actions">
                 <div class="dash-debt-row-amount">${formatCurrency(c.unpaid)}</div>
                 <button onclick="showTab('clients')" class="dash-btn-danger-sm">Relancer</button>
@@ -564,7 +564,7 @@ window.renderDashboard = function(container) {
           return `
             <div class="dash-employee-chip ${isAbsent ? 'is-absent' : 'is-present'}">
               <span class="dash-employee-chip-dot"></span>
-              <span class="dash-employee-chip-name">${e.name || e.login}</span>
+              <span class="dash-employee-chip-name">${escapeHtml(e.name) || escapeHtml(e.login)}</span>
               <span class="dash-employee-chip-status">${isAbsent ? `Absent depuis ${new Date(absence.time).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Algiers', hour: '2-digit', minute: '2-digit' })}` : 'Présent'}</span>
               <button onclick="${isAbsent ? `removeAbsence('${e.id}')` : `markAbsent('${e.id}')`}" class="dash-employee-chip-btn">
                 ${isAbsent ? 'Annuler' : 'Marquer absent'}
@@ -652,7 +652,7 @@ window.renderClientsTable = function(container) {
         </div>
         <div class="flex gap-2 w-full md:w-auto">
           <input id="searchInput_${key}" type="text" value="${ui.filters[key] || ''}" oninput="setListFilter('${key}', this.value)" placeholder="Rechercher un client..." class="flex-grow md:w-64 p-3 border dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 dark:bg-gray-900 dark:text-white">
-          <button onclick="openModal('clientModal')" class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2">
+          <button onclick="openNewClientModal()" class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2">
             <i class="fas fa-plus"></i> Nouveau
           </button>
         </div>
@@ -675,19 +675,19 @@ window.renderClientsTable = function(container) {
               return `
               <tr class="hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
                 <td class="p-4">
-                  <div class="font-bold text-gray-800 dark:text-gray-200">${c.name}</div>
+                  <div class="font-bold text-gray-800 dark:text-gray-200">${escapeHtml(c.name)}</div>
                   <div class="text-[10px] text-gray-400 font-mono">${c.id}</div>
                 </td>
                 <td class="p-4">
                   <div class="flex flex-col gap-1">
                     <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 font-medium">
                       <i class="fab fa-whatsapp text-green-500"></i>
-                      ${c.phone ? `<a href="${buildClientWhatsAppLink(c)}" target="_blank" class="hover:text-green-600 transition-colors">${c.phone}</a>` : '-'}
+                      ${c.phone ? `<a href="${safeUrl(buildClientWhatsAppLink(c))}" target="_blank" class="hover:text-green-600 transition-colors">${escapeHtml(c.phone)}</a>` : '-'}
                     </div>
                     ${c.instagram ? `
                     <div class="flex items-center gap-2 text-sm text-gray-500 font-medium">
                       <i class="fab fa-instagram text-pink-600"></i>
-                      <a href="https://instagram.com/${c.instagram.replace('@', '')}" target="_blank" class="hover:text-pink-700 transition-colors">${c.instagram}</a>
+                      <a href="https://instagram.com/${escapeHtml(c.instagram.replace('@', ''))}" target="_blank" class="hover:text-pink-700 transition-colors">${escapeHtml(c.instagram)}</a>
                     </div>` : ''}
                   </div>
                 </td>
@@ -747,6 +747,25 @@ window.renderClientsTable = function(container) {
 /**
  * Rend l'historique complet des transactions
  */
+// Date de fin d'une transaction (YYYY-MM-DD) : début + (durée - 1) jours, comme sur la facture.
+// Retourne '' si aucune durée n'est connue.
+window.getTransactionEndYmd = function(t) {
+  if (!t) return '';
+  const toYmdLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const days = Number(String(t.duration || t.customDurationDays || '').trim());
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(String(t.date || '')) ? new Date(`${t.date}T00:00:00`) : null;
+  if (start && !isNaN(start.getTime()) && Number.isFinite(days) && days > 0) {
+    start.setDate(start.getDate() + days - 1);
+    return toYmdLocal(start);
+  }
+  // Repli : endDate (timestamp enregistré à la création) = début + durée → on retire 1 jour
+  if (t.endDate && Number.isFinite(Number(t.endDate))) {
+    const e = new Date(Number(t.endDate));
+    if (!isNaN(e.getTime())) { e.setDate(e.getDate() - 1); return toYmdLocal(e); }
+  }
+  return '';
+};
+
 window.renderTransactionsTable = function(container) {
   const ui = getUiState();
   const key = 'transactions';
@@ -756,7 +775,7 @@ window.renderTransactionsTable = function(container) {
   const filtered = query
     ? all.filter(t => {
         const adAccName = t.adAccountId ? ((appState.adAccounts || []).find(a => a.id === t.adAccountId)?.name || '') : 'organique';
-        return `${t.clientName || ''} ${t.offerName || ''} ${t.status || ''} ${adAccName}`.toLowerCase().includes(query);
+        return `${t.clientName || ''} ${t.offerName || ''} ${t.status || ''} ${adAccName} ${t.launchedByName || t.employeeName || 'admin'}`.toLowerCase().includes(query);
       })
     : all;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -774,7 +793,7 @@ window.renderTransactionsTable = function(container) {
           <div class="text-xs text-gray-500">Dernière mise à jour: ${lastUpdated}</div>
         </div>
         <div class="flex flex-col md:flex-row gap-2 md:items-center">
-          <input id="searchInput_${key}" type="text" value="${ui.filters[key] || ''}" oninput="setListFilter('${key}', this.value)" placeholder="Rechercher client/offre/statut..." class="w-full md:w-72 p-3 border rounded-xl outline-none bg-gray-50">
+          <input id="searchInput_${key}" type="text" value="${ui.filters[key] || ''}" oninput="setListFilter('${key}', this.value)" placeholder="Rechercher client/offre/employé/statut..." class="w-full md:w-72 p-3 border rounded-xl outline-none bg-gray-50">
           <button onclick="exportTransactions()" class="text-blue-600 font-bold flex items-center gap-2 justify-center px-4 py-3 rounded-xl border">
             <i class="fas fa-file-csv"></i> Export CSV
           </button>
@@ -790,6 +809,7 @@ window.renderTransactionsTable = function(container) {
               <th class="p-4">Compte Pub</th>
               <th class="p-4 text-right">Montant ($)</th>
               <th class="p-4 text-right">Prix (DZD)</th>
+              <th class="p-4">Lancé par</th>
               <th class="p-4 text-center">Statut</th>
               <th class="p-4 text-center">Actions</th>
             </tr>
@@ -797,20 +817,27 @@ window.renderTransactionsTable = function(container) {
           <tbody class="divide-y">
             ${pageItems.map(t => `
               <tr class="hover:bg-gray-50">
-                <td class="p-4 text-gray-500">${formatDate(t.date)}</td>
-                <td class="p-4 font-bold">${t.clientName}</td>
-                <td class="p-4 text-gray-600">${t.offerName}</td>
+                <td class="p-4 whitespace-nowrap">
+                  <div class="text-gray-700 font-semibold">${formatDate(t.date)}</div>
+                  <div class="text-xs text-gray-400 mt-0.5">${(() => { const e = getTransactionEndYmd(t); return e ? 'Fin : ' + formatDate(e) : 'Fin : —'; })()}</div>
+                </td>
+                <td class="p-4 font-bold">${escapeHtml(t.clientName)}</td>
+                <td class="p-4 text-gray-600">${escapeHtml(t.offerName)}</td>
                 <td class="p-4 text-gray-600">
                   <span class="px-2 py-1 rounded-full text-[10px] font-black ${t.adAccountId ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}">
-                    ${t.adAccountId ? ((appState.adAccounts || []).find(a => a.id === t.adAccountId)?.name || 'Inconnu') : 'Organique'}
+                    ${t.adAccountId ? (escapeHtml((appState.adAccounts || []).find(a => a.id === t.adAccountId)?.name) || 'Inconnu') : 'Organique'}
                   </span>
                 </td>
                 <td class="p-4 text-right font-mono">${t.amount} $</td>
                 <td class="p-4 text-right font-black text-indigo-600">${formatCurrency(t.priceDzd)}</td>
+                <td class="p-4 text-xs font-semibold text-gray-700 whitespace-nowrap">
+                  <i class="fas fa-user text-gray-300 mr-1"></i>${escapeHtml(t.launchedByName) || escapeHtml(t.employeeName) || 'Admin'}
+                </td>
                 <td class="p-4 text-center">
-                  <span class="px-2 py-1 rounded-full text-[10px] font-black ${t.status === 'problem' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
-                    ${t.status === 'problem' ? 'PROBLÈME' : 'VALIDÉ'}
+                  <span class="px-3 py-1 rounded-full text-[11px] font-black ${t.paid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                    ${t.paid ? 'PAYÉ' : 'IMPAYÉ'}
                   </span>
+                  ${t.status === 'problem' ? '<div class="mt-1 text-[9px] font-black text-orange-600 uppercase">⚠ Problème</div>' : ''}
                 </td>
                 <td class="p-4 text-center">
                    <div class="flex justify-center gap-2">
@@ -878,10 +905,10 @@ window.renderPaymentsTable = function(container) {
             ${pageItems.map(p => `
               <tr class="hover:bg-gray-50">
                 <td class="p-4 text-gray-500">${formatDate(p.date)}</td>
-                <td class="p-4 font-bold">${p.clientName}</td>
+                <td class="p-4 font-bold">${escapeHtml(p.clientName)}</td>
                 <td class="p-4 font-black text-green-600">${formatCurrency(p.amount)}</td>
-                <td class="p-4 text-gray-600">${p.method}</td>
-                <td class="p-4 text-gray-400 italic text-xs max-w-xs truncate">${p.note || '-'}</td>
+                <td class="p-4 text-gray-600">${escapeHtml(p.method)}</td>
+                <td class="p-4 text-gray-400 italic text-xs max-w-xs truncate">${escapeHtml(p.note) || '-'}</td>
                 <td class="p-4 text-center">
                    <button onclick="deletePayment('${p.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash-alt"></i></button>
                 </td>
@@ -947,7 +974,7 @@ window.renderUsdPurchasesTable = function(container) {
                 <td class="p-4 font-black text-teal-600">${safeToFixed(p.amount, 2)} $</td>
                 <td class="p-4 text-gray-600">${p.rate}</td>
                 <td class="p-4 font-bold text-gray-700">${formatCurrency(p.totalDzd)}</td>
-                <td class="p-4 text-gray-500 text-xs">${p.source || '-'}</td>
+                <td class="p-4 text-gray-500 text-xs">${escapeHtml(p.source) || '-'}</td>
                 <td class="p-4 text-center">
                    <button onclick="deleteUsdPurchase('${p.id}')" class="text-red-400"><i class="fas fa-trash-alt"></i></button>
                 </td>
@@ -997,9 +1024,9 @@ window.renderRequests = function(container) {
                  <i class="fas ${r.platform === 'meta' ? 'fa-facebook text-blue-600' : 'fa-tiktok text-black'}"></i>
               </div>
               <div>
-                <div class="font-bold text-gray-800">${r.instagram || r.pageFacebook || 'Client'}</div>
+                <div class="font-bold text-gray-800">${escapeHtml(r.instagram) || escapeHtml(r.pageFacebook) || 'Client'}</div>
                 <div class="text-[10px] text-gray-500">${formatDate(r.date)}</div>
-                <div class="text-xs font-bold text-indigo-600">${r.offer || 'Offre Perso'}</div>
+                <div class="text-xs font-bold text-indigo-600">${escapeHtml(r.offer) || 'Offre Perso'}</div>
               </div>
             </div>
             <div class="flex gap-2 w-full md:w-auto justify-end">
@@ -1067,7 +1094,7 @@ window.renderSettingsAdmin = function(container) {
             <span class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-full text-xs font-bold">hichem@sponsor.com (par défaut)</span>
             ${((appState.globalConfig && appState.globalConfig.adminEmails) || []).map((em, idx) => `
               <span class="px-3 py-1.5 bg-red-600 text-white rounded-full text-xs font-bold flex items-center gap-2">
-                ${em}
+                ${escapeHtml(em)}
                 <button onclick="removeAdminEmail(${idx})" class="hover:text-red-200"><i class="fas fa-times"></i></button>
               </span>
             `).join('')}
@@ -1108,8 +1135,8 @@ window.renderSettingsAdmin = function(container) {
                 <div class="p-4 border rounded-2xl flex flex-col gap-3">
                   <div class="flex items-center justify-between">
                     <div>
-                      <div class="font-bold text-gray-800">${e.name || e.login}</div>
-                      <div class="text-xs text-gray-500">${e.login}</div>
+                      <div class="font-bold text-gray-800">${escapeHtml(e.name) || escapeHtml(e.login)}</div>
+                      <div class="text-xs text-gray-500">${escapeHtml(e.login)}</div>
                       <div class="text-sm text-gray-600 font-semibold">Salaire: ${(e.salary || 0).toLocaleString()} DA</div>
                     </div>
                     <div class="flex items-center gap-2">
@@ -1131,7 +1158,7 @@ window.renderSettingsAdmin = function(container) {
                   <div class="border-t pt-3 mt-1">
                     <div class="text-xs font-bold text-gray-500 mb-2 uppercase">Permissions d'Accès :</div>
                     <div class="flex flex-wrap gap-3">
-                      ${['dashboard', 'clients', 'history', 'todo', 'offers', 'expenses', 'paiements', 'achats', 'reminders', 'ad-accounts', 'requests', 'performance', 'employees'].map(tab => {
+                      ${['dashboard', 'clients', 'history', 'todo', 'offers', 'expenses', 'paiements', 'achats', 'reminders', 'ad-accounts', 'requests', 'performance', 'payroll', 'accounting', 'pilotage', 'crm', 'readonly', 'employees'].map(tab => {
                         const labels = { 
                           dashboard: 'Dashboard', 
                           clients: 'Clients', 
@@ -1145,6 +1172,11 @@ window.renderSettingsAdmin = function(container) {
                           'ad-accounts': 'Comptes Pub', 
                           requests: 'Demandes',
                           performance: 'Performance Salariés',
+                          payroll: 'Paie salariés (montants)',
+                          accounting: 'Comptabilité',
+                          pilotage: 'Pilotage',
+                          crm: 'CRM',
+                          readonly: '🔒 Lecture seule (comptable)',
                           employees: 'Employés'
                         };
                         const isChecked = e.permissions && e.permissions[tab] === true;
@@ -1206,8 +1238,8 @@ window.renderOffersGrid = function(container) {
                <button onclick="editOffer('${o.id}')" class="text-blue-600"><i class="fas fa-edit"></i></button>
                <button onclick="deleteOffer('${o.id}')" class="text-red-400"><i class="fas fa-trash-alt"></i></button>
             </div>
-            <h3 class="text-lg font-black text-gray-800 mb-2">${o.name}</h3>
-            <p class="text-xs text-gray-500 mb-4 line-clamp-2">${o.description || '-'}</p>
+            <h3 class="text-lg font-black text-gray-800 mb-2">${escapeHtml(o.name)}</h3>
+            <p class="text-xs text-gray-500 mb-4 line-clamp-2">${escapeHtml(o.description) || '-'}</p>
             <div class="flex justify-between items-end">
               <div>
                 <div class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Prix Vente</div>
@@ -1422,10 +1454,10 @@ window.renderExpensesTab = function(container) {
             ${pageItems.map(e => `
               <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/30">
                 <td class="p-4 text-gray-500 dark:text-gray-400">${formatDate(e.date)}</td>
-                <td class="p-4 font-bold ${e._type === 'usd_purchase' ? 'text-teal-600' : 'text-gray-800 dark:text-gray-200'}">${e.category || '-'}</td>
+                <td class="p-4 font-bold ${e._type === 'usd_purchase' ? 'text-teal-600' : 'text-gray-800 dark:text-gray-200'}">${escapeHtml(e.category) || '-'}</td>
                 <td class="p-4 text-gray-600 dark:text-gray-400">${(e.account || 'liquide').toUpperCase()}</td>
                 <td class="p-4 font-black ${e._type === 'usd_purchase' ? 'text-teal-600' : 'text-rose-600'}">${formatCurrency(e.amount)}</td>
-                <td class="p-4 text-gray-500 dark:text-gray-400 text-xs max-w-xs truncate">${e.note || '-'}</td>
+                <td class="p-4 text-gray-500 dark:text-gray-400 text-xs max-w-xs truncate">${escapeHtml(e.note) || '-'}</td>
                 <td class="p-4 text-center">
                   ${e._type === 'expense' 
                     ? `<button onclick="deleteExpense('${e.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash-alt"></i></button>`
@@ -1478,8 +1510,8 @@ window.renderExpensesTab = function(container) {
         ` : (appState.recurringExpenses || []).map(r => `
           <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 border dark:border-gray-700">
             <div>
-              <div class="font-bold text-gray-800 dark:text-gray-200">${r.label}</div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">${r.category || 'Récurrent'} • Compte: ${(r.account || 'liquide').toUpperCase()}</div>
+              <div class="font-bold text-gray-800 dark:text-gray-200">${escapeHtml(r.label)}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(r.category) || 'Récurrent'} • Compte: ${(r.account || 'liquide').toUpperCase()}</div>
             </div>
             <div class="flex items-center gap-4">
               <div class="font-black text-indigo-600">${formatCurrency(r.amount)}/mois</div>
@@ -1560,14 +1592,14 @@ window.renderTodoTable = function(container) {
                     'bg-gray-50 text-gray-700 border-gray-200'
                   }">
                     <option value="pending" ${t._type === 'todo' ? 'selected' : ''}>TODO</option>
-                    <option value="in_progress" ${t._type === 'in_progress' ? 'selected' : ''}>${t._type === 'in_progress' && t.employeeName ? 'EN COURS - ' + t.employeeName : 'EN COURS'}</option>
+                    <option value="in_progress" ${t._type === 'in_progress' ? 'selected' : ''}>${t._type === 'in_progress' && t.employeeName ? 'EN COURS - ' + escapeHtml(t.employeeName) : 'EN COURS'}</option>
                     <option value="done">FAIT / GAIN</option>
-                    <option value="problem" ${t._type === 'problem' ? 'selected' : ''}>${t._type === 'problem' && t.employeeName ? 'PROBLÈME - ' + t.employeeName : 'PROBLÈME'}</option>
+                    <option value="problem" ${t._type === 'problem' ? 'selected' : ''}>${t._type === 'problem' && t.employeeName ? 'PROBLÈME - ' + escapeHtml(t.employeeName) : 'PROBLÈME'}</option>
                   </select>
                 </td>
                 <td class="p-4 text-gray-500 dark:text-gray-400">${formatDate(t.date)}</td>
-                <td class="p-4 font-bold text-gray-800 dark:text-gray-200">${t.clientName || '-'}</td>
-                <td class="p-4 text-gray-600 dark:text-gray-400">${t.offerName || '-'}</td>
+                <td class="p-4 font-bold text-gray-800 dark:text-gray-200">${escapeHtml(t.clientName) || '-'}</td>
+                <td class="p-4 text-gray-600 dark:text-gray-400">${escapeHtml(t.offerName) || '-'}</td>
                 <td class="p-4 font-mono">${safeToFixed(t.amount, 2)} $</td>
                 <td class="p-4 font-black text-indigo-600">${formatCurrency(t.priceDzd)}</td>
                 <td class="p-4 text-center">
@@ -1575,7 +1607,7 @@ window.renderTodoTable = function(container) {
                     <input type="checkbox" onclick="toggleTodoPayment('${t.id}', '${t._type}')" class="w-5 h-5 text-indigo-600 rounded shadow-sm focus:ring-indigo-500 cursor-pointer" ${t.paid ? 'checked' : ''}>
                   </label>
                 </td>
-                <td class="p-4 text-gray-600 dark:text-gray-400 text-xs">${t.employeeName || '-'}</td>
+                <td class="p-4 text-gray-600 dark:text-gray-400 text-xs">${escapeHtml(t.employeeName) || '-'}</td>
                 <td class="p-4 text-center">
                    <button onclick="deleteTodoTransaction('${t.id}', '${t._type}')" class="p-2 text-gray-400 hover:bg-gray-100 hover:text-red-500 rounded-lg text-xs font-black transition-colors" title="Supprimer">
                      <i class="fas fa-trash-alt"></i>
@@ -1619,8 +1651,8 @@ window.renderTodoPreview = function() {
           <i class="fas ${t.isProblem ? 'fa-exclamation-triangle' : 'fa-clock'} text-xs"></i>
         </div>
         <div>
-          <div class="font-bold text-gray-800 text-xs">${t.clientName}</div>
-          <div class="text-[10px] text-gray-500">${t.offerName}</div>
+          <div class="font-bold text-gray-800 text-xs">${escapeHtml(t.clientName)}</div>
+          <div class="text-[10px] text-gray-500">${escapeHtml(t.offerName)}</div>
         </div>
       </div>
       <div class="text-right font-black text-indigo-600 text-xs">
@@ -1654,10 +1686,10 @@ window.renderTopClients = function() {
     <div onclick="showTab('clients')" class="p-3 bg-gray-50 rounded-2xl border border-gray-100 flex justify-between items-center cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all">
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs">
-          ${c.name.charAt(0).toUpperCase()}
+          ${escapeHtml(c.name.charAt(0).toUpperCase())}
         </div>
         <div>
-          <div class="font-bold text-gray-800 text-xs">${c.name}</div>
+          <div class="font-bold text-gray-800 text-xs">${escapeHtml(c.name)}</div>
           <div class="text-[10px] font-bold ${c.unpaid > 0 ? 'text-red-500' : (c.unpaid < 0 ? 'text-green-500' : 'text-gray-400')}">
             ${c.unpaid > 0 ? 'Dette: ' + formatCurrency(c.unpaid) : (c.unpaid < 0 ? 'Crédit: ' + formatCurrency(Math.abs(c.unpaid)) : 'À jour')}
           </div>
@@ -1677,6 +1709,9 @@ window.renderNewTodoForm = function(container) {
   const clients = appState.clients || [];
   const offers = appState.offers || [];
   const adAccounts = appState.adAccounts || [];
+  const todoEmployees = (appState.employees || []).filter(e => e.active !== false);
+  const todoSessionEmpId = (appState.session && appState.session.type === 'employee') ? (appState.session.employeeId || '') : '';
+  const todoEscAttr = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   container.innerHTML = `
     <div class="bg-white rounded-3xl shadow-xl p-8 border fade-in max-w-2xl mx-auto">
@@ -1698,7 +1733,7 @@ window.renderNewTodoForm = function(container) {
                      autocomplete="off">
               <input type="hidden" id="todoClientId" required value="">
               <div id="clientDropdown" class="absolute z-50 w-full mt-1 bg-white border rounded-2xl shadow-lg max-h-60 overflow-y-auto" style="display: none;">
-                ${clients.map(c => `<div class="p-3 hover:bg-indigo-50 cursor-pointer client-option" data-id="${c.id}" data-name="${c.name}" onclick="selectClient(this)">${c.name}</div>`).join('')}
+                ${clients.map(c => `<div class="p-3 hover:bg-indigo-50 cursor-pointer client-option" data-id="${c.id}" data-name="${escapeHtml(c.name)}" onclick="selectClient(this)">${escapeHtml(c.name)}</div>`).join('')}
               </div>
             </div>
             <style>
@@ -1707,10 +1742,17 @@ window.renderNewTodoForm = function(container) {
           </div>
         </div>
         <div>
+          <label class="block text-sm font-bold text-gray-700 mb-2"><i class="fas fa-user-tie text-indigo-500 mr-1"></i> Lancé par</label>
+          <select id="todoLaunchedBy" class="w-full p-4 border rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
+            <option value="" ${todoSessionEmpId ? '' : 'selected'}>Admin</option>
+            ${todoEmployees.map(e => `<option value="${todoEscAttr(e.id)}" ${e.id === todoSessionEmpId ? 'selected' : ''}>${todoEscAttr(e.name || e.login || 'Employé')}</option>`).join('')}
+          </select>
+        </div>
+        <div>
           <label class="block text-sm font-bold text-gray-700 mb-2">Compte Publicitaire</label>
           <select id="todoAdAccountId" class="w-full p-4 border rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
             <option value="">-- Aucun compte (Organique) --</option>
-            ${adAccounts.map(a => `<option value="${a.id}">${a.name} (${a.platform})</option>`).join('')}
+            ${adAccounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)} (${escapeHtml(a.platform)})</option>`).join('')}
           </select>
         </div>
         <div>
@@ -1719,7 +1761,7 @@ window.renderNewTodoForm = function(container) {
           <select id="todoOfferId" required onchange="updateTodoPrice()" class="w-full p-4 border rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50">
             <option value="">-- Sélectionner une offre --</option>
             <option value="__custom__">Offre personnalisée (manuel)</option>
-            ${offers.map(o => `<option value="${o.id}">${o.name} (${formatCurrency(o.priceDzd ?? o.price)})</option>`).join('')}
+            ${offers.map(o => `<option value="${o.id}">${escapeHtml(o.name)} (${formatCurrency(o.priceDzd ?? o.price)})</option>`).join('')}
           </select>
           <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
             <span id="todoOfferMatchCount"></span>
@@ -1834,7 +1876,7 @@ window.renderRemindersTable = function(container) {
                 <i class="fas fa-exclamation-circle text-xl"></i>
               </div>
               <div class="flex-grow">
-                <div class="font-bold text-gray-800 dark:text-white text-lg">${c.name}</div>
+                <div class="font-bold text-gray-800 dark:text-white text-lg">${escapeHtml(c.name)}</div>
                 <div class="text-sm text-red-600 dark:text-red-400 font-black mb-2">Dette: ${formatCurrency(c.unpaid)}</div>
                 ${(() => {
                   const stats = (typeof getClientDebtStats === 'function') ? getClientDebtStats(c) : null;
@@ -1854,7 +1896,7 @@ window.renderRemindersTable = function(container) {
                     </span>` : ''}
                   </div>`;
                 })()}
-                <input type="text" value="${c.debtNote || ''}" onchange="updateClientDebtNote('${c.id}', this.value)" placeholder="Ajouter une note de relance..." class="w-full text-xs p-2 border border-red-200 dark:border-red-900/50 rounded-lg outline-none bg-white/60 dark:bg-gray-800 focus:ring-1 focus:ring-red-400 text-gray-700 dark:text-gray-300">
+                <input type="text" value="${escapeHtml(c.debtNote) || ''}" onchange="updateClientDebtNote('${c.id}', this.value)" placeholder="Ajouter une note de relance..." class="w-full text-xs p-2 border border-red-200 dark:border-red-900/50 rounded-lg outline-none bg-white/60 dark:bg-gray-800 focus:ring-1 focus:ring-red-400 text-gray-700 dark:text-gray-300">
               </div>
             </div>
             <div class="flex flex-wrap md:flex-nowrap gap-2 w-full md:w-auto mt-2 md:mt-0 items-center justify-end">
@@ -1953,6 +1995,11 @@ window.renderAdAccountsTable = function(container) {
             <div class="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Token Meta</div>
             <input id="meta-live-token" type="password" class="mt-2 w-full p-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl font-black text-sm outline-none focus:ring-2 focus:ring-red-400 dark:text-white" placeholder="Colle ton token ici">
             <div id="meta-live-identity" class="text-xs font-bold mt-2 text-gray-600 dark:text-gray-300">—</div>
+            <div class="mt-2 flex items-center gap-2 text-[11px] font-bold text-gray-500 dark:text-gray-300">
+              <span>Version API : <span id="meta-live-apiver">v25.0</span></span>
+              <input id="meta-live-apiver-input" type="text" placeholder="ex: v26.0" class="w-24 px-2 py-1 border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-xs dark:text-white">
+              <button type="button" onclick="setMetaApiVersion(document.getElementById('meta-live-apiver-input').value)" class="px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-black">OK</button>
+            </div>
           </div>
           <div class="lg:col-span-2">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2054,7 +2101,7 @@ window.renderAdAccountsTable = function(container) {
               <div class="w-10 h-10 rounded-xl flex items-center justify-center ${acc.platform === 'meta' ? 'bg-blue-100 text-blue-600' : 'bg-black text-white'}">
                 <i class="fab ${acc.platform === 'meta' ? 'fa-facebook' : 'fa-tiktok'} text-xl"></i>
               </div>
-              <h3 class="text-lg font-black text-gray-800 dark:text-white">${acc.name}</h3>
+              <h3 class="text-lg font-black text-gray-800 dark:text-white">${escapeHtml(acc.name)}</h3>
             </div>
             <div class="flex justify-between items-center">
               <div>
@@ -2101,7 +2148,7 @@ window.renderMonthlyStatsChart = function() {
     const monthKey = d.toLocaleString('fr-FR', { month: 'short' });
     if (monthlyData[monthKey]) {
       monthlyData[monthKey].income += (t.priceDzd || 0);
-      const buyRate = typeof getBuyRate === 'function' ? getBuyRate() : 255;
+      const buyRate = (typeof getTransactionBuyRate === 'function') ? getTransactionBuyRate(t) : (typeof getBuyRate === 'function' ? getBuyRate() : 255);
       const p = typeof calculateTransactionProfit === 'function'
         ? calculateTransactionProfit(Number(t.amount || 0), Number(t.priceDzd || 0), buyRate)
         : (Number(t.priceDzd || 0) - (Number(t.amount || 0) * buyRate));
@@ -2190,7 +2237,7 @@ window.updateTodoBadge = function() {
 window.renderEmployeePerformance = function(container) {
   const employees = appState.employees || [];
   const txs = appState.transactions || [];
-  const config = appState.performanceConfig || {
+  const config = (typeof getPerformanceConfig === 'function') ? getPerformanceConfig() : appState.performanceConfig || {
     ratePerTask: 1700,
     fixedCosts: {
       salary: 40000,
@@ -2201,6 +2248,7 @@ window.renderEmployeePerformance = function(container) {
   };
 
   function calculPrime(gain) {
+    if (typeof getPrimeForGain === 'function') return getPrimeForGain(gain);
     if (gain >= 350000) return 12000;
     if (gain >= 250000) return 8000;
     if (gain >= 150000) return 5000;
@@ -2314,6 +2362,8 @@ window.renderEmployeePerformance = function(container) {
     const emp = employees.find(e => e.id === id);
     const stats = getEmployeeStats(id, ui.startDate, ui.endDate);
     const tasks = stats.range;
+    // Crédits d'équipe (tâches des subordonnés) : affichés à part, JAMAIS ajoutés aux totaux société ci-dessous
+    const teamTasks = (window.TeamOrg && id !== 'unassigned') ? TeamOrg.teamTasks(id, ui.startDate, ui.endDate) : 0;
     const gain = tasks * config.ratePerTask;
     const share = gain * 0.3;
     const prime = calculPrime(gain);
@@ -2332,6 +2382,9 @@ window.renderEmployeePerformance = function(container) {
       week: stats.week,
       month: stats.month,
       range: stats.range,
+      team: teamTasks,
+      points: stats.range + teamTasks,
+      title: (emp && emp.title) || '',
       gain,
       share,
       prime,
@@ -2359,7 +2412,7 @@ window.renderEmployeePerformance = function(container) {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <select id="perf-employee" class="p-4 border dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 dark:text-white">
           <option value="">-- Choisir un salarié --</option>
-          ${employees.map(emp => `<option value="${emp.id}">${emp.name}</option>`).join('')}
+          ${employees.map(emp => `<option value="${emp.id}">${escapeHtml(emp.name)}</option>`).join('')}
         </select>
         <input type="number" id="perf-tasks" placeholder="Nombre de tâches" value="1" class="p-4 border dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 dark:text-white">
         <input type="date" id="perf-date" value="${toYmd(today)}" class="p-4 border dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 dark:text-white">
@@ -2449,6 +2502,8 @@ window.renderEmployeePerformance = function(container) {
               <th class="p-4 text-center font-bold text-gray-700 dark:text-white">Cette Semaine</th>
               <th class="p-4 text-center font-bold text-gray-700 dark:text-white">Ce Mois</th>
               <th class="p-4 text-center font-bold text-gray-700 dark:text-white">Période</th>
+              <th class="p-4 text-center font-bold text-purple-700 dark:text-purple-300" title="Tâches des subordonnés (créditées au responsable, non additionnées au total)">Équipe</th>
+              <th class="p-4 text-center font-bold text-gray-700 dark:text-white" title="Tâches personnelles + tâches de l'équipe">Points</th>
               <th class="p-4 text-center font-bold text-gray-700 dark:text-white">Gain</th>
               <th class="p-4 text-center font-bold text-gray-700 dark:text-white">30%</th>
               <th class="p-4 text-center font-bold text-gray-700 dark:text-white">Prime</th>
@@ -2458,16 +2513,18 @@ window.renderEmployeePerformance = function(container) {
           <tbody class="divide-y dark:divide-gray-700">
             ${rows.length === 0 ? `
               <tr>
-                <td colspan="10" class="text-center p-12 text-gray-500 dark:text-gray-400 italic">Aucune performance enregistrée</td>
+                <td colspan="12" class="text-center p-12 text-gray-500 dark:text-gray-400 italic">Aucune performance enregistrée</td>
               </tr>
             ` : rows.map(r => `
               <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td class="p-4 font-medium text-gray-800 dark:text-white">${r.name}</td>
+                <td class="p-4 font-medium text-gray-800 dark:text-white">${escapeHtml(r.name)}${r.title ? `<div class="text-[11px] font-normal text-indigo-500">${escapeHtml(r.title)}</div>` : ''}</td>
                 <td class="p-4 text-center text-indigo-600 font-bold">${r.today}</td>
                 <td class="p-4 text-center text-indigo-600 font-bold">${r.yesterday}</td>
                 <td class="p-4 text-center text-indigo-600 font-bold">${r.week}</td>
                 <td class="p-4 text-center text-indigo-600 font-bold">${r.month}</td>
                 <td class="p-4 text-center text-green-600 font-bold">${r.range}</td>
+                <td class="p-4 text-center font-bold ${r.team ? 'text-purple-600' : 'text-gray-300'}">${r.team || '—'}</td>
+                <td class="p-4 text-center font-black text-gray-800 dark:text-white">${r.points}</td>
                 <td class="p-4 text-center text-gray-700 dark:text-gray-300">${r.gain.toLocaleString()} DA</td>
                 <td class="p-4 text-center text-gray-700 dark:text-gray-300">${Math.round(r.share).toLocaleString()} DA</td>
                 <td class="p-4 text-center text-gray-700 dark:text-gray-300">${r.prime.toLocaleString()} DA</td>
@@ -2479,115 +2536,17 @@ window.renderEmployeePerformance = function(container) {
       </div>
     </div>
 
-    <!-- Employee Payments -->
-    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-6 border dark:border-gray-700">
-      <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-6">Gestion des paiements des salariés</h2>
-      
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        ${employees.filter(e => e.active).map(emp => {
-          const empPayments = (appState.employeePayments || []).filter(p => p.employeeId === emp.id);
-          const totalPaid = empPayments.filter(p => p.paid).reduce((sum, p) => sum + Number(p.amount), 0);
-          
-          // Calculate for current month (from selected range)
-          const fromDate = parseYmd(ui.startDate);
-          const toDate = parseYmd(ui.endDate);
-          const monthStart = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
-          const monthEnd = new Date(toDate.getFullYear(), toDate.getMonth() + 1, 0);
-          const fromStr = toYmd(monthStart);
-          const toStr = toYmd(monthEnd);
-          
-          // Get absences in that month
-          const monthAbsences = (appState.absences || []).filter(a => 
-            a.employeeId === emp.id && a.date >= fromStr && a.date <= toStr
-          );
-          
-          // Calculate prime for that month
-          const empStats = getEmployeeStats(emp.id, fromStr, toStr);
-          const tasksInMonth = empStats.range;
-          const gain = tasksInMonth * (config.ratePerTask || 1700);
-          const prime = calculPrime(gain);
-          
-          // Calculate adjusted salary
-          const baseSalary = emp.salary || 0;
-          const dailySalary = baseSalary / 30; // Assume 30-day month
-          const absenceDeduction = dailySalary * monthAbsences.length;
-          const adjustedSalary = Math.max(0, baseSalary + prime - absenceDeduction);
-          
-          const totalDue = Math.max(0, adjustedSalary - totalPaid);
-          
-          return `
-            <div class="p-4 border rounded-2xl bg-gray-50 dark:bg-gray-700">
-              <div class="flex justify-between items-start mb-4">
-                <div>
-                  <h4 class="font-bold text-gray-800 dark:text-white">${emp.name || emp.login}</h4>
-                  <p class="text-sm text-gray-500 dark:text-gray-400">Salaire: ${(baseSalary).toLocaleString()} DA</p>
-                </div>
-                <button onclick="openAddPaymentModal('${emp.id}')" class="px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700">
-                  Ajouter paiement
-                </button>
-              </div>
-              
-              <!-- Salary breakdown -->
-              <div class="bg-white dark:bg-gray-900 p-3 rounded-xl mb-4 border">
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Détail du mois:</p>
-                <div class="space-y-1 text-sm">
-                  <div class="flex justify-between text-gray-700 dark:text-gray-300">
-                    <span>Salaire de base</span>
-                    <span>${baseSalary.toLocaleString()} DA</span>
-                  </div>
-                  <div class="flex justify-between text-green-700 dark:text-green-400">
-                    <span>Prime</span>
-                    <span>+${prime.toLocaleString()} DA</span>
-                  </div>
-                  <div class="flex justify-between text-red-700 dark:text-red-400">
-                    <span>Absences (${monthAbsences.length}j)</span>
-                    <span>-${Math.round(absenceDeduction).toLocaleString()} DA</span>
-                  </div>
-                  <div class="border-t border-gray-200 dark:border-gray-700 pt-1 mt-1 flex justify-between font-bold text-gray-800 dark:text-white">
-                    <span>Total à payer</span>
-                    <span>${Math.round(adjustedSalary).toLocaleString()} DA</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-green-100 dark:bg-green-900/30 p-3 rounded-xl">
-                  <p class="text-xs text-green-700 dark:text-green-400 font-bold">Payé</p>
-                  <p class="text-lg font-black text-green-800 dark:text-green-300">${totalPaid.toLocaleString()} DA</p>
-                </div>
-                <div class="bg-red-100 dark:bg-red-900/30 p-3 rounded-xl">
-                  <p class="text-xs text-red-700 dark:text-red-400 font-bold">Restant</p>
-                  <p class="text-lg font-black text-red-800 dark:text-red-300">${Math.round(totalDue).toLocaleString()} DA</p>
-                </div>
-              </div>
-              
-              <div class="space-y-2 max-h-40 overflow-y-auto">
-                ${empPayments.length === 0 ? `
-                  <p class="text-sm text-gray-500 italic">Aucun paiement enregistré</p>
-                ` : empPayments.slice().reverse().map(p => `
-                  <div class="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded-xl border">
-                    <div>
-                      <p class="text-sm font-bold text-gray-800 dark:text-white">${p.description || 'Paiement'}</p>
-                      <p class="text-xs text-gray-500">${p.date}</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <span class="text-sm font-bold ${p.paid ? 'text-green-600' : 'text-red-600'}">${Number(p.amount).toLocaleString()} DA</span>
-                      <button onclick="togglePaymentStatus('${p.id}')" class="px-2 py-1 text-xs font-bold rounded-lg ${p.paid ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}">
-                        ${p.paid ? 'Payé ✓' : 'Non payé'}
-                      </button>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          `;
-        }).join('')}
-        ${employees.filter(e => e.active).length === 0 ? `
-          <div class="col-span-full text-center py-8 text-gray-500 dark:text-gray-400 italic">Aucun employé actif</div>
-        ` : ''}
-      </div>
-    </div>
+    <!-- Gestion de la paie (module payroll.js) -->
+    <div id="payrollSection"></div>
   `;
+
+  // Gestion de la paie (journal, historique des paiements, bulletins) : module payroll.js
+  try {
+    const payrollBox = document.getElementById('payrollSection');
+    if (payrollBox && typeof window.renderPayrollSection === 'function') window.renderPayrollSection(payrollBox);
+  } catch (err) {
+    console.error('Erreur section paie:', err);
+  }
 
   // Render the chart
   if (typeof Chart !== 'undefined') {

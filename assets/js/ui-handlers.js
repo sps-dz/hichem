@@ -117,6 +117,8 @@ window.closeModal = function(modalId) {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
+    const t = document.getElementById('clientModalTitle');
+    if (t) t.innerHTML = '<i class="fas fa-user-plus text-blue-600"></i> Nouveau Client';
   }
   modal.classList.add('hidden');
   modal.classList.remove('flex');
@@ -129,8 +131,8 @@ function populatePaymentClientDropdown() {
   if (!dropdown) return;
   const clients = appState.clients || [];
   dropdown.innerHTML = clients.map(c => `
-    <div class="p-3 hover:bg-orange-50 cursor-pointer payment-client-option" data-id="${c.id}" data-name="${c.name}">
-      ${c.name} <span class="text-xs text-gray-400">(Dette: ${formatCurrency(c.unpaid || 0)})</span>
+    <div class="p-3 hover:bg-orange-50 cursor-pointer payment-client-option" data-id="${c.id}" data-name="${escapeHtml(c.name)}">
+      ${escapeHtml(c.name)} <span class="text-xs text-gray-400">(Dette: ${formatCurrency(c.unpaid || 0)})</span>
     </div>
   `).join('');
   dropdown.querySelectorAll('.payment-client-option').forEach(opt => {
@@ -327,7 +329,7 @@ window.exportPDF = function() {
     margin: [10, 10],
     filename: `Sponsor_Manager_Export_${new Date().toISOString().slice(0, 10)}.pdf`,
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
+    html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
   html2pdf().set(opt).from(element).save().then(() => {
@@ -338,146 +340,422 @@ window.exportPDF = function() {
   });
 };
 
-window.generateInvoicePdf = function(txId) {
-  if (typeof html2pdf !== 'function') {
-    showToast('PDF indisponible (librairie non chargée)', 'error');
-    return;
+// === FACTURE : aperçu direct (sans téléchargement automatique) ===
+
+// Nombre -> lettres en français (ex: 7000 -> "sept mille")
+window.numberToFrenchWords = function(num) {
+  let n = Math.floor(Math.abs(Number(num) || 0));
+  if (n === 0) return 'zéro';
+  const u = ['zéro','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze','treize','quatorze','quinze','seize'];
+  const t = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante'];
+  const below100 = (x) => {
+    if (x < 17) return u[x];
+    if (x < 20) return 'dix-' + u[x - 10];
+    if (x < 70) {
+      const d = Math.floor(x / 10), r = x % 10;
+      if (r === 0) return t[d];
+      if (r === 1) return t[d] + ' et un';
+      return t[d] + '-' + u[r];
+    }
+    if (x < 80) {
+      const r = x - 60;
+      return r === 11 ? 'soixante et onze' : 'soixante-' + below100(r);
+    }
+    if (x === 80) return 'quatre-vingts';
+    return 'quatre-vingt-' + below100(x - 80);
+  };
+  // final = false quand le nombre est suivi de "mille" (vingts/cents restent invariables)
+  const below1000 = (x, final) => {
+    const h = Math.floor(x / 100), r = x % 100;
+    let out = '';
+    if (h > 0) {
+      out = h === 1 ? 'cent' : u[h] + ' cent';
+      if (r === 0 && h > 1 && final) out += 's';
+    }
+    if (r > 0) {
+      let w = below100(r);
+      if (!final && w === 'quatre-vingts') w = 'quatre-vingt';
+      out += (out ? ' ' : '') + w;
+    }
+    return out;
+  };
+  const parts = [];
+  const millions = Math.floor(n / 1000000);
+  const thousands = Math.floor((n % 1000000) / 1000);
+  const rest = n % 1000;
+  if (millions > 0) parts.push(below1000(millions, true) + (millions > 1 ? ' millions' : ' million'));
+  if (thousands > 0) parts.push(thousands === 1 ? 'mille' : below1000(thousands, false) + ' mille');
+  if (rest > 0) parts.push(below1000(rest, true));
+  return parts.join(' ');
+};
+
+window.amountToFrenchDinars = function(amount) {
+  const n = Math.round(Math.abs(Number(amount) || 0));
+  let words = numberToFrenchWords(n);
+  let unit = n > 1 ? 'dinars algériens' : 'dinar algérien';
+  if (n >= 1000000 && n % 1000000 === 0) unit = 'de dinars algériens';
+  words = words.charAt(0).toUpperCase() + words.slice(1);
+  return `${words} ${unit}`;
+};
+
+window.buildInvoiceHtml = function(tx) {
+  const esc = (v) => String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const fmtDA = (v) => `${Math.round(Number(v) || 0).toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} DA`;
+  const fmtDay = (d) => {
+    try { return new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Africa/Algiers' }); }
+    catch (e) { return ''; }
+  };
+
+  const baseDate = tx.date || getLocalDateString();
+  const legacyInvNumber = `INV-${String(baseDate).split('-').join('')}-${String(tx.id).slice(-6)}`;
+  // Numérotation : identique à l'ancienne par défaut ; séquentielle (FAC-AAAA-0001) si activée dans Comptabilité > Profil
+  const invNumber = (typeof getInvoiceNumber === 'function') ? getInvoiceNumber(tx, legacyInvNumber) : legacyInvNumber;
+  // Profil entreprise (valeurs par défaut = celles qui étaient écrites en dur auparavant)
+  const PF = (typeof getCompanyProfile === 'function') ? getCompanyProfile() : { name: 'Hichem Sponsor', tagline: 'Agence de Marketing Digital', email: 'contact.hichemsps@gmail.com', address1: 'Ouled Fayet, Cité Verte', address2: 'Alger, Algérie' };
+  const pfWords = String(PF.name || 'Hichem Sponsor').split(' ');
+  const pfFirst = esc(pfWords.shift() || ''), pfRest = esc(pfWords.join(' '));
+  const client = esc(tx.clientName || 'Client');
+  const dateLabel = esc(fmtDay(baseDate) || baseDate);
+  const usd = safeToFixed(tx.amount, 2);
+  const total = fmtDA(tx.priceDzd);
+  const paid = !!tx.paid;
+
+  // Durée : "7 jours" + période (du ... au ...) — le dernier jour = début + (durée - 1)
+  const daysNum = Number(String(tx.duration || tx.customDurationDays || '').trim());
+  const hasDays = Number.isFinite(daysNum) && daysNum > 0;
+  let durationMain = 'N/A', durationRange = '';
+  if (hasDays) {
+    durationMain = `${daysNum} jour${daysNum > 1 ? 's' : ''}`;
+    const start = new Date(baseDate);
+    if (!isNaN(start.getTime())) {
+      const end = new Date(start.getTime());
+      end.setDate(end.getDate() + daysNum - 1);
+      durationRange = `(du ${fmtDay(start)} au ${fmtDay(end)})`;
+    }
+  } else if (tx.duration) {
+    durationMain = String(tx.duration);
   }
+
+  const clientInfo = (appState.clients || []).find(c => c.id === tx.clientId);
+  const contactLabel = esc(clientInfo ? (clientInfo.phone || clientInfo.instagram || clientInfo.contact || '-') : '-');
+  const amountWords = esc(amountToFrenchDinars(tx.priceDzd));
+
+  const navy = '#0f2a52', blue = '#1d6fe8', soft = '#eef4fd', line = '#dbe5f3';
+  const icon = window.INVOICE_LOGO_ICON || '';
+  const iconWhite = window.INVOICE_LOGO_ICON_WHITE || '';
+  const svgCheck = (c, s) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+
+  const infoLines = [];
+  if (hasDays) infoLines.push(`La durée de la prestation est de ${daysNum} jour${daysNum > 1 ? 's' : ''} à partir de la date de lancement.`);
+  infoLines.push(paid ? 'Le montant est 100% réglé.' : `Le montant reste à régler : ${total}.`);
+  infoLines.push('Merci de votre confiance.');
+  if (PF.showPayment && PF.paymentNote) infoLines.push('Règlement : ' + PF.paymentNote);
+  const legalBits = [PF.nif && ('NIF : ' + PF.nif), PF.rc && ('RC : ' + PF.rc), PF.nis && ('NIS : ' + PF.nis), PF.ai && ('AI : ' + PF.ai), PF.legalNote].filter(Boolean).join(' — ');
+  if (legalBits) infoLines.push(legalBits);
+
+  const statusPill = paid
+    ? `<span style="display:inline-flex;align-items:center;gap:6px;background:#16b364;color:#fff;font-weight:800;font-size:15px;padding:5px 18px 5px 12px;border-radius:999px;">${svgCheck('#fff', 14)} PAYÉ</span>`
+    : `<span style="display:inline-flex;align-items:center;gap:6px;background:#ef4444;color:#fff;font-weight:800;font-size:15px;padding:5px 18px;border-radius:999px;">IMPAYÉ</span>`;
+
+  const inner = `
+  <div class="inv" style="position:relative;width:794px;height:1122px;box-sizing:border-box;overflow:hidden;background:#fbfdfe;font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:${navy};">
+
+    <!-- coin décoratif -->
+    <svg width="110" height="110" viewBox="0 0 110 110" style="position:absolute;top:0;left:0;"><polygon points="0,0 80,0 0,100" fill="#2f7cf0"/><polygon points="0,0 46,0 0,58" fill="#1555c0"/></svg>
+
+    <div style="padding:46px 40px 0 40px;">
+      <!-- En-tête -->
+      <div style="display:flex;align-items:center;justify-content:space-between;height:112px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          ${icon ? `<img src="${icon}" alt="" style="height:78px;width:auto;display:block;">` : ''}
+          <div>
+            <div style="font-size:38px;font-weight:800;letter-spacing:-1px;line-height:1;"><span style="color:${navy};">${pfFirst}</span> <span style="color:${blue};">${pfRest}</span></div>
+            <div style="font-size:11px;letter-spacing:3.4px;color:#4b5b75;margin-top:8px;font-weight:600;">${esc(String(PF.tagline || '').toUpperCase())}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+              <span style="display:inline-block;width:26px;height:2px;background:${blue};"></span>
+              <span style="font-size:11px;font-style:italic;letter-spacing:1px;color:#4b5b75;">Votre croissance, notre priorité</span>
+              <span style="display:inline-block;width:26px;height:2px;background:${blue};"></span>
+            </div>
+          </div>
+        </div>
+        <div style="border-left:2px solid ${line};padding-left:20px;font-size:12.5px;line-height:1.45;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="${blue}"><path d="M2 5h20v14H2z" opacity=".15"/><path d="M3 6.5l9 6.5 9-6.5V5H3z"/><path d="M3 8.2V19h18V8.2l-9 6.3z"/></svg>
+            <span>${esc(PF.email)}</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="${blue}"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+            <span>${esc(PF.address1)}<br><span style="color:#6b7a90;font-size:11.5px;">${esc(PF.address2)}</span></span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${blue}" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+            <span>Date de lancement :<br><b>${dateLabel}</b></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:1px;background:${line};margin:22px 0 28px;"></div>
+
+      <!-- Titre + infos facture -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="padding-top:2px;">
+          <div style="font-size:54px;font-weight:900;letter-spacing:-1px;line-height:1;">FACTURE</div>
+          <div style="font-size:16px;color:#4b5b75;margin-top:8px;">Prestation de service – Sponsoring Publicitaire</div>
+        </div>
+        <div style="width:300px;">
+          <div style="background:#e1ecfc;border-radius:10px;padding:10px 20px;">
+            <div style="font-size:12.5px;letter-spacing:1px;color:#2b4a7c;">N° FACTURE</div>
+            <div style="font-size:19px;font-weight:800;color:${navy};margin-top:2px;">${invNumber}</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:${soft};border-radius:10px;padding:9px 20px;margin-top:10px;font-size:13.5px;">
+            <span style="color:#4b5b75;">Date d'émission</span>
+            <span style="display:flex;align-items:center;gap:8px;font-weight:600;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${navy}" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>${dateLabel}
+            </span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:${soft};border-radius:10px;padding:7px 20px;margin-top:8px;font-size:13.5px;">
+            <span style="color:#4b5b75;">Statut</span>${statusPill}
+          </div>
+        </div>
+      </div>
+
+      <div style="height:1px;background:${line};margin:24px 0 20px;"></div>
+
+      <!-- Client -->
+      <div style="display:flex;align-items:flex-start;gap:14px;background:${soft};border:1px solid ${line};border-radius:10px;padding:16px 20px;">
+        <svg width="34" height="34" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="${blue}"/><circle cx="12" cy="9.5" r="3.6" fill="#fff"/><path d="M5.5 19c.8-3.4 3.5-5 6.5-5s5.7 1.6 6.5 5z" fill="#fff"/></svg>
+        <div>
+          <div style="font-size:14px;font-weight:800;color:${blue};letter-spacing:.5px;">CLIENT</div>
+          <div style="font-size:24px;font-weight:800;line-height:1.2;margin-top:2px;">${client}</div>
+          <div style="font-size:14.5px;color:#34445f;margin-top:2px;">Contact : ${contactLabel}</div>
+        </div>
+      </div>
+
+      <!-- Tableau -->
+      <div style="margin-top:28px;border:1px solid ${line};border-radius:10px;overflow:hidden;">
+        <div style="display:flex;background:${navy};color:#fff;font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;">
+          <div style="flex:0 0 41%;box-sizing:border-box;padding:15px 24px;">Description de l'offre</div>
+          <div style="flex:0 0 19%;box-sizing:border-box;padding:15px 4px;text-align:center;">Durée</div>
+          <div style="flex:0 0 16%;box-sizing:border-box;padding:15px 4px;text-align:center;">Budget (USD)</div>
+          <div style="flex:1;padding:15px 4px;text-align:center;">Montant (DZD)</div>
+        </div>
+        <div style="display:flex;align-items:stretch;background:#f6f9fe;">
+          <div style="flex:0 0 41%;box-sizing:border-box;padding:18px 24px;display:flex;align-items:center;gap:14px;">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="${blue}"><path d="M3 10v4a1 1 0 0 0 1 1h2l2 5h2.2l-1.6-5H11l7 4V5l-7 4H4a1 1 0 0 0-1 1z"/><path d="M19.5 9.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="${blue}" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <div>
+              <div style="font-size:17px;font-weight:800;line-height:1.15;white-space:nowrap;">Sponsoring Publicitaire</div>
+              <div style="font-size:14px;color:#4b5b75;margin-top:3px;">${esc(tx.offerName || 'Service Standard')}</div>
+            </div>
+          </div>
+          <div style="flex:0 0 19%;box-sizing:border-box;border-left:1px solid ${line};padding:12px 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
+            <div style="font-size:15px;font-weight:600;">${esc(durationMain)}</div>
+            ${durationRange ? `<div style="font-size:10.5px;color:#4b5b75;margin-top:4px;">${esc(durationRange)}</div>` : ''}
+          </div>
+          <div style="flex:0 0 16%;box-sizing:border-box;border-left:1px solid ${line};display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;">${usd} $</div>
+          <div style="flex:1;border-left:1px solid ${line};display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:800;color:${blue};white-space:nowrap;">${total}</div>
+        </div>
+      </div>
+
+      <!-- Totaux + infos -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:28px;gap:24px;">
+        <div style="flex:1;min-width:0;">
+          <div style="height:1px;background:${line};margin-bottom:18px;"></div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <span style="display:inline-flex;width:36px;height:36px;border-radius:50%;background:${blue};align-items:center;justify-content:center;">${svgCheck('#fff', 20)}</span>
+            <span style="font-size:15px;font-weight:800;color:${blue};letter-spacing:.3px;">INFORMATIONS IMPORTANTES</span>
+          </div>
+          ${infoLines.map(l => `<div style="display:flex;align-items:flex-start;gap:12px;font-size:13.5px;color:#25375a;margin:8px 0 8px 12px;">${svgCheck(blue, 15)}<span>${esc(l)}</span></div>`).join('')}
+        </div>
+        <div style="flex:0 0 330px;background:${soft};border:1px solid ${line};border-radius:12px;padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px 12px;font-size:17px;">
+            <span>Sous-total</span><b style="font-size:19px;">${total}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:${blue};color:#fff;border-radius:10px;padding:13px 18px;">
+            <span style="font-size:20px;font-weight:800;">TOTAL</span><span style="font-size:25px;font-weight:900;">${total}</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:8px;padding:12px 6px 2px;font-size:12px;color:#34445f;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="${blue}" style="flex:0 0 16px;margin-top:1px;"><ellipse cx="9" cy="6" rx="6" ry="3"/><path d="M3 8.5v3c0 1.7 2.7 3 6 3s6-1.3 6-3v-3c-1.4 1.1-3.6 1.7-6 1.7S4.4 9.6 3 8.5z"/><path d="M3 13.5v2.5c0 1.7 2.7 3 6 3s6-1.3 6-3v-2.5c-1.4 1.1-3.6 1.7-6 1.7s-4.6-.6-6-1.7z"/></svg>
+            <span>Montant en lettres : <i>${amountWords}</i></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mot de fin + signature -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:26px;">
+        <div>
+          <div style="font-family:'Brush Script MT','Segoe Script','Lucida Handwriting',cursive;font-style:italic;font-size:22px;color:${navy};">À très bientôt pour de nouveaux projets !</div>
+          <div style="width:94px;height:2px;background:${blue};margin-top:12px;"></div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:14px;font-weight:800;">L'équipe ${esc(PF.name)}</div>
+          <svg width="130" height="52" viewBox="0 0 130 52" fill="none" stroke="${navy}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 44C20 40 30 8 40 8c6 0 2 26-6 34 10-6 20-22 28-22 5 0 0 16-3 20 12-4 22-14 40-17"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pied de page -->
+    <div style="position:absolute;left:0;right:0;bottom:0;height:104px;">
+      <svg width="794" height="26" viewBox="0 0 794 26" preserveAspectRatio="none" style="position:absolute;top:-8px;left:0;"><path d="M0 22 C220 0 520 4 794 14 L794 26 L0 26Z" fill="#2f7cf0" opacity=".55"/></svg>
+      <div style="position:absolute;top:10px;left:0;right:0;bottom:0;background:${navy};display:flex;align-items:center;justify-content:space-between;padding:0 40px;color:#fff;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          ${iconWhite ? `<img src="${iconWhite}" alt="" style="height:46px;width:auto;">` : ''}
+          <div>
+            <div style="font-size:18px;font-weight:800;line-height:1.1;">${esc(PF.name)}</div>
+            <div style="font-size:11px;color:#c9d6ee;margin-top:2px;">${esc(PF.tagline)}</div>
+          </div>
+        </div>
+        <div style="font-size:14px;letter-spacing:.5px;color:#e6eefb;border-left:1px solid #34527f;border-right:1px solid #34527f;padding:6px 26px;">Publicité &nbsp;•&nbsp; Stratégie &nbsp;•&nbsp; <i>Résultats</i></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#6fa8ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4c3.5-.5 6 0 6 0s.5 2.5 0 6c-1 2-3 4-5 5l-4-4c1-2 1.5-5 3-7z"/><path d="M9 11l-4 1 2 2M13 15l-1 4-2-2M7.5 16.5c-1.5.3-2.5 1.5-3 3.5 2-.5 3.2-1.5 3.5-3z"/><circle cx="15.5" cy="8.5" r="1.3"/></svg>
+          <div style="font-size:14px;font-style:italic;line-height:1.25;">Ensemble vers<br>plus de ventes</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  return { inner, invNumber };
+};
+
+// Ouvre l'aperçu de la facture directement à l'écran (aucun téléchargement automatique).
+window.generateInvoicePdf = function(txId) {
   const tx = (appState.transactions || []).find(t => t.id === txId);
   if (!tx) {
     showToast('Transaction introuvable', 'error');
     return;
   }
+  const { inner, invNumber } = buildInvoiceHtml(tx);
+  window._invoicePreviewTxId = txId;
 
-  const invNumber = `INV-${String(tx.date || getLocalDateString()).split('-').join('')}-${String(tx.id).slice(-6)}`;
-  const company = 'Hichem Sponsor';
-  const client = tx.clientName || 'Client';
-  const dateLabel = typeof formatDate === 'function' ? formatDate(tx.date) : (tx.date || '');
-  const usd = safeToFixed(tx.amount, 2);
-  const dzd = formatCurrency(tx.priceDzd);
-  const paidLabel = tx.paid ? 'Payé' : 'Impayé';
-  const buyRate = typeof getBuyRate === 'function' ? getBuyRate() : 255;
-  const profit = typeof calculateTransactionProfit === 'function'
-    ? calculateTransactionProfit(Number(tx.amount || 0), Number(tx.priceDzd || 0), buyRate)
-    : null;
+  let modal = document.getElementById('invoicePreviewModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'invoicePreviewModal';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-2 md:p-6';
+    modal.innerHTML = `
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col" style="height:94vh;">
+        <div class="flex flex-wrap items-center justify-between gap-2 p-3 md:p-4 border-b">
+          <div class="font-black text-gray-800 flex items-center gap-2">
+            <i class="fas fa-file-invoice text-blue-600"></i>
+            <span id="invoicePreviewTitle">Aperçu facture</span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="downloadInvoicePdf()" class="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700">
+              <i class="fas fa-download mr-1"></i> Télécharger PDF
+            </button>
+            <button type="button" onclick="printInvoicePreview()" class="px-4 py-2 border rounded-xl font-bold text-sm text-gray-700 hover:bg-gray-50">
+              <i class="fas fa-print mr-1"></i> Imprimer
+            </button>
+            <button type="button" onclick="closeInvoicePreview()" class="px-4 py-2 bg-gray-100 rounded-xl font-bold text-sm text-gray-700 hover:bg-gray-200">
+              <i class="fas fa-times mr-1"></i> Fermer
+            </button>
+          </div>
+        </div>
+        <iframe id="invoicePreviewFrame" title="Aperçu facture" class="flex-1 w-full rounded-b-2xl" style="border:0; background:#e5e7eb;"></iframe>
+      </div>`;
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeInvoicePreview(); });
+    document.body.appendChild(modal);
+  }
 
-  const durationLabel = tx.duration ? `${tx.duration}` : 'N/A';
-  const clientInfo = (appState.clients || []).find(c => c.id === tx.clientId);
-  const contactLabel = clientInfo ? (clientInfo.phone || clientInfo.instagram || clientInfo.contact || '-') : '-';
+  const title = document.getElementById('invoicePreviewTitle');
+  if (title) title.textContent = `Facture ${invNumber}`;
+  const frame = document.getElementById('invoicePreviewFrame');
+  // La feuille A4 (794px) est réduite automatiquement pour tenir dans la largeur de l'écran.
+  frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      @page{size:A4;margin:0;}
+      html,body{margin:0;background:#e5e7eb;}
+      #wrap{width:794px;margin:12px auto;box-shadow:0 2px 14px rgba(0,0,0,.2);transform-origin:top left;}
+      @media print{html,body{background:#fff;}#wrap{margin:0;box-shadow:none;transform:none !important;}}
+    </style></head><body><div id="wrap">${inner}</div>
+    <script>
+      function fit(){
+        var w=document.getElementById('wrap');
+        var s=Math.min(1,(window.innerWidth-16)/794);
+        w.style.transform='scale('+s+')';
+        w.style.margin=(12)+'px '+Math.max(8,(window.innerWidth-794*s)/2)+'px';
+        document.body.style.height=(1122*s+24)+'px';
+      }
+      fit(); window.addEventListener('resize',fit);
+    <\/script></body></html>`;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+};
 
+window.closeInvoicePreview = function() {
+  const modal = document.getElementById('invoicePreviewModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  const frame = document.getElementById('invoicePreviewFrame');
+  if (frame) frame.srcdoc = '';
+  window._invoicePreviewTxId = null;
+};
+
+window.printInvoicePreview = function() {
+  const frame = document.getElementById('invoicePreviewFrame');
+  if (!frame || !frame.contentWindow) return;
+  frame.contentWindow.focus();
+  frame.contentWindow.print();
+};
+
+// Téléchargement PDF uniquement quand l'utilisateur clique sur le bouton de l'aperçu.
+window.downloadInvoicePdf = function() {
+  if (typeof html2pdf !== 'function') {
+    showToast('PDF indisponible (librairie non chargée)', 'error');
+    return;
+  }
+  const tx = (appState.transactions || []).find(t => t.id === window._invoicePreviewTxId);
+  if (!tx) {
+    showToast('Transaction introuvable', 'error');
+    return;
+  }
+  const { inner, invNumber } = buildInvoiceHtml(tx);
   const node = document.createElement('div');
-  node.style.padding = '40px';
-  node.style.fontFamily = 'Arial, sans-serif';
-  node.style.color = '#374151';
-  node.style.backgroundColor = '#ffffff';
-  node.style.maxWidth = '800px';
-  node.style.margin = '0 auto';
-  
-  node.innerHTML = `
-    <!-- Header -->
-    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 40px; border-bottom: 2px solid #f3f4f6; padding-bottom: 20px;">
-      <div>
-        <h1 style="font-size:32px; font-weight:900; color:#111827; margin:0; letter-spacing:-1px;">Hichem Sponsor</h1>
-        <p style="font-size:14px; color:#6b7280; margin:4px 0 0 0;">Agence de Marketing Digital</p>
-        <p style="font-size:12px; color:#9ca3af; margin:2px 0 0 0;">hichemsponsor.contact@gmail.com</p>
-      </div>
-      <div style="text-align:right;">
-        <h2 style="font-size:24px; font-weight:800; color:#3b82f6; margin:0; text-transform:uppercase;">FACTURE</h2>
-        <table style="margin-top:10px; text-align:right; font-size:13px; float:right;" cellspacing="0" cellpadding="2">
-          <tr>
-            <td style="color:#6b7280; padding-right:12px;">N° Facture:</td>
-            <td style="font-weight:700; color:#111827;">${invNumber}</td>
-          </tr>
-          <tr>
-            <td style="color:#6b7280; padding-right:12px;">Date:</td>
-            <td style="font-weight:700; color:#111827;">${dateLabel}</td>
-          </tr>
-          <tr>
-            <td style="color:#6b7280; padding-right:12px;">Statut:</td>
-            <td style="font-weight:900; color:${tx.paid ? '#10b981' : '#ef4444'}; text-transform:uppercase;">${paidLabel}</td>
-          </tr>
-        </table>
-      </div>
-    </div>
-
-    <!-- Client Info -->
-    <div style="margin-bottom: 40px;">
-      <h3 style="font-size:14px; color:#9ca3af; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px 0; border-bottom:1px solid #e5e7eb; padding-bottom:4px; display:inline-block;">Facturé à</h3>
-      <p style="font-size:18px; font-weight:800; color:#111827; margin:0 0 4px 0;">${client}</p>
-      <p style="font-size:14px; color:#4b5563; margin:0;">Contact: <span style="font-weight:600;">${contactLabel}</span></p>
-    </div>
-
-    <!-- Items Table -->
-    <table style="width:100%; border-collapse:collapse; margin-bottom:40px;">
-      <thead>
-        <tr style="background-color:#f9fafb; border-top:1px solid #e5e7eb; border-bottom:2px solid #e5e7eb;">
-          <th style="padding:12px 16px; text-align:left; font-size:12px; color:#6b7280; text-transform:uppercase; letter-spacing:1px;">Description de l'Offre</th>
-          <th style="padding:12px 16px; text-align:center; font-size:12px; color:#6b7280; text-transform:uppercase; letter-spacing:1px;">Durée</th>
-          <th style="padding:12px 16px; text-align:right; font-size:12px; color:#6b7280; text-transform:uppercase; letter-spacing:1px;">Budget (USD)</th>
-          <th style="padding:12px 16px; text-align:right; font-size:12px; color:#6b7280; text-transform:uppercase; letter-spacing:1px;">Montant (DZD)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr style="border-bottom:1px solid #f3f4f6;">
-          <td style="padding:16px; font-size:14px; font-weight:700; color:#111827;">
-            ${tx.offerName || 'Service Standard'}
-          </td>
-          <td style="padding:16px; text-align:center; font-size:14px; color:#4b5563;">
-            ${durationLabel}
-          </td>
-          <td style="padding:16px; text-align:right; font-size:14px; color:#4b5563; font-family:monospace;">
-            ${usd} $
-          </td>
-          <td style="padding:16px; text-align:right; font-size:15px; font-weight:800; color:#111827;">
-            ${dzd}
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <!-- Totals -->
-    <div style="display:flex; justify-content:flex-end;">
-      <table style="width:300px; border-collapse:collapse;">
-        <tr>
-          <td style="padding:12px 16px; font-size:14px; color:#6b7280; text-align:right;">Sous-total:</td>
-          <td style="padding:12px 16px; font-size:15px; font-weight:600; color:#111827; text-align:right; border-bottom:1px solid #e5e7eb;">${dzd}</td>
-        </tr>
-        <tr>
-          <td style="padding:16px; font-size:18px; font-weight:800; color:#111827; text-align:right;">TOTAL:</td>
-          <td style="padding:16px; font-size:20px; font-weight:900; color:#3b82f6; text-align:right;">${dzd}</td>
-        </tr>
-        ${profit !== null ? `
-        <!-- Internal Profit Tracking (Optional/Hidden for actual clients) -->
-        <tr style="opacity:0.3;">
-          <td style="padding:4px 16px; font-size:10px; color:#9ca3af; text-align:right;">Marge (Interne):</td>
-          <td style="padding:4px 16px; font-size:10px; color:#9ca3af; text-align:right;">${formatCurrency(profit)}</td>
-        </tr>
-        ` : ''}
-      </table>
-    </div>
-
-    <!-- Footer -->
-    <div style="margin-top:60px; padding-top:20px; border-top:1px solid #e5e7eb; text-align:center;">
-      <p style="font-size:14px; font-weight:700; color:#374151; margin:0 0 4px 0;">Merci pour votre confiance !</p>
-      <p style="font-size:12px; color:#9ca3af; margin:0;">Si vous avez des questions concernant cette facture, veuillez nous contacter.</p>
-    </div>
-  `;
+  node.style.width = '794px';
+  node.innerHTML = inner;
 
   const opt = {
-    margin: [10, 10],
+    margin: 0,
     filename: `${invNumber}.pdf`,
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: [] }
   };
-
-  showToast('Génération de la facture...', 'info');
-  html2pdf().set(opt).from(node).save().then(() => {
-    showToast('Facture générée', 'success');
+  showToast('Génération du PDF...', 'info');
+  html2pdf().set(opt).from(node).toPdf().get('pdf').then(pdf => {
+    // La facture tient sur une seule page A4 : on retire toute page vide en trop.
+    while (pdf.getNumberOfPages() > 1) pdf.deletePage(pdf.getNumberOfPages());
+  }).save().then(() => {
+    showToast('Facture téléchargée', 'success');
   }).catch(err => {
     console.error(err);
     showToast('Erreur lors de la génération', 'error');
   });
+};
+
+// === EXPORT CSV de l'historique des transactions ===
+window.exportTransactions = function() {
+  const list = [...(appState.transactions || [])].sort((a, b) => (toTs ? toTs(b) - toTs(a) : 0));
+  const q = (s) => `"${String(s == null ? '' : s).replace(/"/g, '""')}"`;
+  const rows = [['Date', 'Client', 'Offre', 'Compte Pub', 'Montant USD', 'Prix DZD', 'Lancé par', 'Statut', 'Payé'].join(',')];
+  list.forEach(t => {
+    const ad = t.adAccountId ? ((appState.adAccounts || []).find(a => a.id === t.adAccountId)?.name || 'Inconnu') : 'Organique';
+    rows.push([
+      q(t.date), q(t.clientName), q(t.offerName), q(ad), q(t.amount), q(t.priceDzd),
+      q(t.launchedByName || t.employeeName || 'Admin'), q(t.status === 'problem' ? 'PROBLÈME' : 'VALIDÉ'), q(t.paid ? 'Oui' : 'Non')
+    ].join(','));
+  });
+  const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Export CSV réussi', 'success');
 };
 
 // === RAPPORT FINANCIER PDF ===
@@ -580,7 +858,7 @@ window.exportFinancialReportPdf = function() {
     margin: [10, 10],
     filename: `Rapport_Financier_${toYmd(today)}.pdf`,
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
+    html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
@@ -648,10 +926,24 @@ window.addClient = function() {
   if (typeof renderCurrentTab === 'function') renderCurrentTab();
 };
 
+// Ouvre le formulaire en mode CRÉATION : toujours vierge, jamais lié à un client modifié avant.
+window.openNewClientModal = function() {
+  window.editingClientId = null;
+  ['newClientName', 'newClientPhone', 'newClientInstagram', 'newClientFacebook', 'newClientNotes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const t = document.getElementById('clientModalTitle');
+  if (t) t.innerHTML = '<i class="fas fa-user-plus text-blue-600"></i> Nouveau Client';
+  openModal('clientModal');
+};
+
 window.editClient = function(id) {
   const client = (appState.clients || []).find(c => c.id === id);
   if (!client) return;
   window.editingClientId = id;
+  const modalTitle = document.getElementById('clientModalTitle');
+  if (modalTitle) modalTitle.innerHTML = '<i class="fas fa-user-pen text-blue-600"></i> Modifier le client';
   const ig = client.instagram || (client.social && Array.isArray(client.social.instagram) && client.social.instagram[0]) || client.username || '';
   const fb = (client.social && Array.isArray(client.social.facebook) && client.social.facebook[0]) || '';
   if (document.getElementById('newClientName')) document.getElementById('newClientName').value = client.name || '';
@@ -780,6 +1072,19 @@ window.handleNewTodoSubmit = function(actionMode, event) {
     durationDays = customDuration;
   }
 
+    // "Lancé par" : employé choisi dans la liste (Admin si vide). Sans champ, on retombe sur la session.
+    const launchedBy = (function() {
+      const sel = document.getElementById('todoLaunchedBy');
+      const sess = appState.session;
+      if (sel) {
+        const emp = sel.value ? (appState.employees || []).find(e => e.id === sel.value) : null;
+        if (emp) return { id: emp.id, name: emp.name || emp.login || 'Employé', isAdmin: false };
+        return { id: null, name: 'Admin', isAdmin: true };
+      }
+      if (sess && sess.type === 'employee') return { id: sess.employeeId || null, name: sess.name || 'Employé', isAdmin: false };
+      return { id: null, name: 'Admin', isAdmin: true };
+    })();
+
     const todoDateStr = document.getElementById('todoDate')?.value || getLocalDateString();
     const adAccountId = document.getElementById('todoAdAccountId')?.value || null;
     
@@ -809,8 +1114,12 @@ window.handleNewTodoSubmit = function(actionMode, event) {
     endDate: endDate,
     createdAt: Date.now(),
     customDurationDays: durationDays,
-    employeeId: (appState.session && appState.session.type === 'employee') ? appState.session.employeeId : null,
-    employeeName: (appState.session && appState.session.type === 'employee') ? (appState.session.name || '') : null
+    employeeId: launchedBy.id,
+    employeeName: launchedBy.isAdmin ? null : launchedBy.name,
+    launchedById: launchedBy.id,
+    launchedByName: launchedBy.name,
+    // Taux d'achat USD figé à la date de la vente (la marge de cette vente ne bouge plus si le taux change)
+    buyRate: (typeof getBuyRate === 'function') ? Number(getBuyRate()) || undefined : undefined
   };
 
   if (actionMode === 'direct') {
@@ -915,6 +1224,7 @@ window.changeTodoStatus = function(id, newStatus, currentType) {
        if (destStatus === 'active') {
          item.status = 'active';
          item.completedAt = Date.now();
+         if (!item.buyRate && typeof getBuyRate === 'function') item.buyRate = Number(getBuyRate()) || undefined;
          const client = (appState.clients || []).find(c => c.id === item.clientId);
          if (client) {
            client.totalSpent = (client.totalSpent || 0) + (item.priceDzd || 0);
@@ -925,7 +1235,7 @@ window.changeTodoStatus = function(id, newStatus, currentType) {
        }
     } else {
        if (!appState.transactions) appState.transactions = [];
-       const newTx = { ...item, id: generateId('tx'), status: destStatus };
+       const newTx = { ...item, id: generateId('tx'), status: destStatus, buyRate: item.buyRate || ((typeof getBuyRate === 'function') ? Number(getBuyRate()) || undefined : undefined) };
        if (destStatus === 'active') {
          newTx.completedAt = Date.now();
          const client = (appState.clients || []).find(c => c.id === item.clientId);
@@ -1359,11 +1669,11 @@ window.openActivityLogModal = function() {
       <div class="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 border dark:border-gray-700">
         <i class="fas ${actionIcon(l.action)} mt-1"></i>
         <div class="flex-1 min-w-0">
-          <div class="font-bold text-gray-800 dark:text-gray-200 text-sm">${l.action}</div>
-          ${l.details ? `<div class="text-xs text-gray-500 dark:text-gray-400 truncate">${l.details}</div>` : ''}
+          <div class="font-bold text-gray-800 dark:text-gray-200 text-sm">${escapeHtml(l.action)}</div>
+          ${l.details ? `<div class="text-xs text-gray-500 dark:text-gray-400 truncate">${escapeHtml(l.details)}</div>` : ''}
         </div>
         <div class="text-right shrink-0">
-          <div class="text-xs font-bold text-indigo-500">${l.actor}</div>
+          <div class="text-xs font-bold text-indigo-500">${escapeHtml(l.actor)}</div>
           <div class="text-[10px] text-gray-400">${new Date(l.ts).toLocaleString('fr-FR', { timeZone: 'Africa/Algiers' })}</div>
         </div>
       </div>
@@ -1506,7 +1816,7 @@ window.openAbsenceHistoryModal = function() {
         return `
           <div class="p-4 border rounded-2xl bg-gray-50 dark:bg-gray-700 mb-4">
             <h4 class="font-bold text-gray-800 dark:text-white mb-2">
-              ${emp ? emp.name : 'Employé inconnu'}
+              ${emp ? escapeHtml(emp.name) : 'Employé inconnu'}
               <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
                 (${absences.length} absence${absences.length > 1 ? 's' : ''})
               </span>
@@ -1582,77 +1892,7 @@ window.deleteAbsence = function(absenceId) {
   showToast('Absence supprimée', 'success');
 };
 
-// Payment functions
-window.openAddPaymentModal = function(employeeId) {
-  const employee = appState.employees.find(e => e.id === employeeId);
-  if (!employee) return;
-  
-  // Create a temporary modal for adding payment
-  const modal = document.createElement('div');
-  modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-  modal.innerHTML = `
-    <div class="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl w-full max-w-md shadow-2xl fade-in border dark:border-gray-700">
-      <div class="flex justify-between items-center mb-6">
-        <h3 class="text-xl font-bold flex items-center gap-2 dark:text-white">
-          <i class="fas fa-money-check-alt text-indigo-600"></i> Ajouter paiement pour ${employee.name || employee.login}
-        </h3>
-        <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-gray-600 text-2xl">
-          ×
-        </button>
-      </div>
-      <div class="space-y-4 mb-6">
-        <input id="newPaymentDesc" type="text" placeholder="Description (ex: Salaire juillet 2025)" class="w-full p-4 border dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 dark:text-white">
-        <input id="newPaymentAmount" type="number" placeholder="Montant (DA)" class="w-full p-4 border dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 dark:text-white">
-        <input id="newPaymentDate" type="date" value="${new Date().toISOString().split('T')[0]}" class="w-full p-4 border dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 dark:text-white">
-      </div>
-      <div class="flex gap-3">
-        <button onclick="this.closest('.fixed').remove()" class="flex-1 px-6 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl font-bold">Annuler</button>
-        <button onclick="addEmployeePayment('${employeeId}')" class="flex-1 px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all">Ajouter</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-};
-
-window.addEmployeePayment = function(employeeId) {
-  const desc = document.getElementById('newPaymentDesc').value;
-  const amount = Number(document.getElementById('newPaymentAmount').value);
-  const date = document.getElementById('newPaymentDate').value;
-  
-  if (!amount || !date) {
-    showToast('Veuillez remplir tous les champs', 'error');
-    return;
-  }
-  
-  if (!appState.employeePayments) appState.employeePayments = [];
-  
-  appState.employeePayments.push({
-    id: 'payment-' + Date.now(),
-    employeeId,
-    description: desc,
-    amount,
-    date,
-    paid: false,
-    createdAt: Date.now()
-  });
-  
-  document.querySelector('.fixed').remove();
-  
-  if (typeof autoSave === 'function') autoSave();
-  if (typeof renderCurrentTab === 'function') renderCurrentTab();
-  showToast('Paiement ajouté', 'success');
-};
-
-window.togglePaymentStatus = function(paymentId) {
-  if (!appState.employeePayments) appState.employeePayments = [];
-  const payment = appState.employeePayments.find(p => p.id === paymentId);
-  if (payment) {
-    payment.paid = !payment.paid;
-    if (typeof autoSave === 'function') autoSave();
-    if (typeof renderCurrentTab === 'function') renderCurrentTab();
-    showToast(payment.paid ? 'Paiement marqué payé' : 'Paiement marqué non payé', 'success');
-  }
-};
+// Paiements des salariés : voir assets/js/payroll.js (openPayrollPaymentForm, savePayrollPayment, togglePaymentStatus...)
 
 window.toggleEmployeeActive = function(id) {
   const emp = (appState.employees || []).find(e => e.id === id);
@@ -1698,7 +1938,7 @@ window.previewFile = function(input) {
   if (!preview) return;
   if (input?.files && input.files[0]) {
     const file = input.files[0];
-    preview.innerHTML = `<p class="text-green-600 font-bold">${file.name}</p>`;
+    preview.innerHTML = `<p class="text-green-600 font-bold">${escapeHtml(file.name)}</p>`;
   }
 };
 
@@ -1807,8 +2047,11 @@ window.importLocalBackup = function(event) {
       const result = JSON.parse(e.target.result);
       if (typeof result === 'object' && result !== null) {
         // Merge with current state or replace? Replace makes more sense for a backup restore
+        // Ces clés décrivent la session / l'état technique de CET appareil : elles ne font pas partie des données
+        const SKIP = new Set(['session', 'sync', 'ui', 'adminUid', 'currentTab', 'balances']);
         Object.keys(result).forEach(key => {
-          appState[key] = result[key];
+          if (SKIP.has(key)) return;
+          appState[key] = Array.isArray(result[key]) && typeof filterSafeDocs === 'function' ? filterSafeDocs(result[key], key) : result[key];
         });
         if (typeof autoSave === 'function') autoSave();
         if (typeof renderTables === 'function') renderTables();
@@ -1858,7 +2101,7 @@ window.editTransaction = function(id) {
   const adAccountSelect = document.getElementById('editTxAdAccountId');
   if (adAccountSelect) {
       adAccountSelect.innerHTML = '<option value="">-- Aucun compte (Organique) --</option>' + 
-          (appState.adAccounts || []).map(a => `<option value="${a.id}">${a.name} (${a.platform})</option>`).join('');
+          (appState.adAccounts || []).map(a => `<option value="${a.id}">${escapeHtml(a.name)} (${escapeHtml(a.platform)})</option>`).join('');
       adAccountSelect.value = t.adAccountId || '';
   }
   
@@ -2196,7 +2439,7 @@ function displayOcrResults(sponsors) {
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-1">
               <i class="fas ${statusIcon}"></i>
-              <span class="font-bold text-gray-800">${s.name}</span>
+              <span class="font-bold text-gray-800">${escapeHtml(s.name)}</span>
               <span class="font-bold text-indigo-600">${s.amount.toLocaleString()} DA</span>
             </div>
             <div class="flex flex-wrap gap-2 mt-2">
@@ -2292,6 +2535,7 @@ async function createOcrSponsorsDirect() {
       priceDzd: sponsor.amount,
       duration: sponsor.offer?.duration || '',
       date: today,
+      buyRate: (typeof getBuyRate === 'function') ? Number(getBuyRate()) || undefined : undefined,
       paid: sponsor.paid,
       offerName: sponsor.offer?.name || 'Offre custom',
       createdAt: Date.now(),
@@ -2524,7 +2768,7 @@ window.addEmployeePerformance = function() {
 window.exportPerformanceCSV = function() {
   const employees = appState.employees || [];
   const txs = appState.transactions || [];
-  const config = appState.performanceConfig || {
+  const config = (typeof getPerformanceConfig === 'function') ? getPerformanceConfig() : (appState.performanceConfig || {
     ratePerTask: 1700,
     fixedCosts: {
       salary: 40000,
@@ -2532,9 +2776,10 @@ window.exportPerformanceCSV = function() {
       pub: 20000,
       risque: 15000
     }
-  };
+  });
 
   function calculPrime(gain) {
+    if (typeof getPrimeForGain === 'function') return getPrimeForGain(gain);
     if (gain >= 350000) return 12000;
     if (gain >= 250000) return 8000;
     if (gain >= 150000) return 5000;

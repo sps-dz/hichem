@@ -96,7 +96,7 @@ window.logActivity = function(action, details) {
 
   // On garde un historique raisonnable (évite de faire gonfler le document
   // de réglages synchronisé sur Firestore).
-  if (appState.activityLog.length > 150) appState.activityLog.length = 150;
+  if (appState.activityLog.length > 500) appState.activityLog.length = 500;
 };
 
 /**
@@ -305,9 +305,11 @@ window.showToast = function(message, type = 'info') {
   // Créer l'élément toast
   const toast = document.createElement('div');
   toast.className = `${styles[type] || styles.info} px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 min-w-[300px] transform transition-all duration-300 translate-y-10 opacity-0`;
+  // Le message est affiché comme TEXTE (jamais interprété comme HTML) : un nom de client
+  // contenant du code ne peut donc pas s'exécuter via une notification.
   toast.innerHTML = `
     <i class="fas ${icons[type] || icons.info} text-xl"></i>
-    <span class="font-bold text-sm">${message}</span>
+    <span class="font-bold text-sm">${escapeHtml(message)}</span>
   `;
 
   // Ajouter au DOM

@@ -264,7 +264,7 @@ function renderClientSocialLists(c) {
     arr.forEach((acc, idx) => {
       const chip = document.createElement('div');
       chip.className = 'px-3 py-1 bg-pink-100 text-pink-700 rounded-full text-sm flex items-center gap-2';
-      chip.innerHTML = '<span>' + acc + '</span><button class="text-pink-700" onclick="removeClientInstagram(' + idx + ')"><i class="fas fa-times"></i></button>';
+      chip.innerHTML = '<span>' + escapeHtml(acc) + '</span><button class="text-pink-700" onclick="removeClientInstagram(' + idx + ')"><i class="fas fa-times"></i></button>';
       igWrap.appendChild(chip);
     });
   }
@@ -274,7 +274,7 @@ function renderClientSocialLists(c) {
     arr.forEach((acc, idx) => {
       const chip = document.createElement('div');
       chip.className = 'px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-2';
-      chip.innerHTML = '<span>' + acc + '</span><button class="text-blue-700" onclick="removeClientFacebook(' + idx + ')"><i class="fas fa-times"></i></button>';
+      chip.innerHTML = '<span>' + escapeHtml(acc) + '</span><button class="text-blue-700" onclick="removeClientFacebook(' + idx + ')"><i class="fas fa-times"></i></button>';
       fbWrap.appendChild(chip);
     });
   }
@@ -357,9 +357,9 @@ function renderClientOffers() {
       <div>
         <div class="flex justify-between items-center mb-3">
           <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">Offre</span>
-          <span class="text-lg font-bold text-gray-800">${offer.name}</span>
+          <span class="text-lg font-bold text-gray-800">${escapeHtml(offer.name)}</span>
         </div>
-        <p class="text-gray-600 text-sm mb-4 leading-relaxed">${offer.description || 'Aucune description'}</p>
+        <p class="text-gray-600 text-sm mb-4 leading-relaxed">${escapeHtml(offer.description) || 'Aucune description'}</p>
         ${offer.priceDzd ? `<div class="text-xl font-bold text-blue-600 mb-4">${formatCurrency(offer.priceDzd)}</div>` : ''}
       </div>
       <button onclick="selectClientOffer('${offer.id}')" class="w-full py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all">
@@ -516,7 +516,7 @@ async function renderClientRequests() {
         snaps.forEach(doc => {
           const d = doc.data();
           if (!appState.clientRequests) appState.clientRequests = [];
-          if (!appState.clientRequests.some(r => r.id === d.id)) appState.clientRequests.push(d);
+          if (isSafeDocId(d.id) && !appState.clientRequests.some(r => r.id === d.id)) appState.clientRequests.push(d);
         });
       } catch (e) { console.warn('Sync requests error:', e); }
     }
@@ -551,10 +551,10 @@ async function renderClientRequests() {
     div.className = 'border border-gray-200 rounded-xl p-4 bg-white flex items-center justify-between hover:shadow-sm transition-all';
     div.innerHTML = `
       <div>
-        <div class="font-bold text-gray-800">${req.offer || 'Offre'}</div>
+        <div class="font-bold text-gray-800">${escapeHtml(req.offer) || 'Offre'}</div>
         <div class="text-xs text-gray-500 mt-1"><i class="far fa-clock mr-1"></i> ${new Date(req.date).toLocaleDateString('fr-FR', { timeZone: 'Africa/Algiers' })}</div>
-        ${req.pubLink ? `<div class="text-xs mt-1"><a class="text-blue-600 hover:underline" target="_blank" href="${req.pubLink}"><i class="fas fa-link mr-1"></i> Lien Pub</a></div>` : ''}
-        ${req.instagram ? `<div class="text-xs text-gray-400 mt-0.5">@${req.instagram}</div>` : ''}
+        ${req.pubLink ? `<div class="text-xs mt-1"><a class="text-blue-600 hover:underline" target="_blank" href="${safeUrl(req.pubLink)}"><i class="fas fa-link mr-1"></i> Lien Pub</a></div>` : ''}
+        ${req.instagram ? `<div class="text-xs text-gray-400 mt-0.5">@${escapeHtml(req.instagram)}</div>` : ''}
       </div>
       <span class="px-3 py-1 rounded-full border text-xs font-semibold ${s.cls}">${s.text}</span>
     `;
@@ -572,10 +572,10 @@ function showNewClientPopup() {
         <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
           <i class="fas fa-check"></i>
         </div>
-        <h3 class="text-2xl font-bold text-gray-800 mb-2">${t.popup_new_client_title || 'Bienvenue !'}</h3>
-        <p class="text-gray-600 mb-6">${t.popup_new_client_msg || 'Nous avons bien reçu votre première commande.'}</p>
+        <h3 class="text-2xl font-bold text-gray-800 mb-2">${escapeHtml(t.popup_new_client_title || 'Bienvenue !')}</h3>
+        <p class="text-gray-600 mb-6">${escapeHtml(t.popup_new_client_msg || 'Nous avons bien reçu votre première commande.')}</p>
         <button onclick="closeNewClientPopupAndRedirect()" class="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all">
-          <i class="fas fa-book-open mr-2"></i> ${t.btn_go_method || 'Voir la Méthode de Travail'}
+          <i class="fas fa-book-open mr-2"></i> ${escapeHtml(t.btn_go_method || 'Voir la Méthode de Travail')}
         </button>
       </div>
     </div>
@@ -708,17 +708,17 @@ function renderCustomSectionClient() {
     if (!Array.isArray(cat.photos)) cat.photos = cat.image ? [cat.image] : [];
     const cover = cat.photos[0] || 'https://via.placeholder.com/400x300?text=No+Image';
     const gallery = cat.photos.length > 1
-      ? `<div class="p-4 pt-0 grid grid-cols-3 gap-2">${cat.photos.slice(1).map(p => `<img src="${p}" loading="lazy" class="w-full h-24 object-cover rounded-lg border cursor-pointer" onclick="openImagePreview('${p}')">`).join('')}</div>`
+      ? `<div class="p-4 pt-0 grid grid-cols-3 gap-2">${cat.photos.slice(1).map(p => `<img src="${safeUrl(p)}" loading="lazy" class="w-full h-24 object-cover rounded-lg border cursor-pointer" onclick="openImagePreview('${escapeJsAttr(safeUrlRaw(p))}')">`).join('')}</div>`
       : '';
     const div = document.createElement('div');
     div.className = 'bg-white rounded-2xl shadow-md overflow-hidden border hover:shadow-xl transition-all';
     div.innerHTML = `
       <div class="h-48 bg-gray-200 overflow-hidden">
-        <img src="${cover}" loading="lazy" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-pointer" onclick="openImagePreview('${cover}')">
+        <img src="${safeUrl(cover)}" loading="lazy" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-pointer" onclick="openImagePreview('${escapeJsAttr(safeUrlRaw(cover))}')">
       </div>
       <div class="p-5">
-        <h3 class="text-lg font-bold text-gray-800 mb-1">${cat.title || ''}</h3>
-        <p class="text-gray-600 text-sm leading-relaxed">${cat.desc || ''}</p>
+        <h3 class="text-lg font-bold text-gray-800 mb-1">${escapeHtml(cat.title) || ''}</h3>
+        <p class="text-gray-600 text-sm leading-relaxed">${escapeHtml(cat.desc) || ''}</p>
       </div>
       ${gallery}
     `;

@@ -1,6 +1,28 @@
 (() => {
   const LS_TOKEN = 'sponsor_meta_access_token_v1';
-  const API_VER = 'v19.0';
+  // Version de l'API Meta : centralisée ici (modifiable depuis le panneau, sans toucher au code).
+  // v25.0 = version actuellement prise en charge par l'API Marketing (la v19.0 a expiré en 2025).
+  const DEFAULT_API_VER = 'v25.0';
+  const LS_API_VER = 'sponsor_meta_api_version';
+  function _apiVer() {
+    try {
+      const v = String(localStorage.getItem(LS_API_VER) || '').trim();
+      if (/^v\d{2}\.\d$/.test(v)) return v;
+    } catch (e) {}
+    return DEFAULT_API_VER;
+  }
+  window.getMetaApiVersion = _apiVer;
+  window.setMetaApiVersion = function (v) {
+    const val = String(v || '').trim();
+    if (val === '') { try { localStorage.removeItem(LS_API_VER); } catch (e) {} } else if (/^v\d{2}\.\d$/.test(val)) { try { localStorage.setItem(LS_API_VER, val); } catch (e) {} } else {
+      if (typeof showToast === 'function') showToast('Format attendu : v25.0', 'error');
+      return false;
+    }
+    const lbl = document.getElementById('meta-live-apiver');
+    if (lbl) lbl.textContent = _apiVer();
+    if (typeof showToast === 'function') showToast('Version API Meta : ' + _apiVer(), 'success');
+    return true;
+  };
   let _cachedAdAccounts = [];
 
   function $(id) { return document.getElementById(id); }
@@ -60,7 +82,7 @@
   async function _metaFetch(path, params) {
     const token = _getToken();
     if (!token) throw new Error('token_missing');
-    const u = new URL(`https://graph.facebook.com/${API_VER}/` + path.replace(/^\//, ''));
+    const u = new URL(`https://graph.facebook.com/${_apiVer()}/` + path.replace(/^\//, ''));
     Object.entries(params || {}).forEach(([k, v]) => {
       if (v === undefined || v === null || v === '') return;
       u.searchParams.set(k, String(v));
@@ -111,9 +133,9 @@
     if (sel) {
       const current = String(sel.value || '');
       sel.innerHTML = `<option value="">— Sélectionne —</option>` + _cachedAdAccounts.map(a => {
-        const id = String(a.id || '');
-        const name = String(a.name || id);
-        const cur = a.currency ? ` (${String(a.currency)})` : '';
+        const id = String(a.id || '').replace(/[^\w.:\-]/g, '');
+        const name = escapeHtml(String(a.name || id));
+        const cur = a.currency ? ` (${escapeHtml(String(a.currency))})` : '';
         return `<option value="${id}">${name}${cur}</option>`;
       }).join('');
       sel.value = current;
@@ -352,10 +374,10 @@
 
     if (!items.length) { box.textContent = 'Aucune campagne.'; return; }
     box.innerHTML = `<div class="space-y-2">` + items.map(c => {
-      const id = String(c.id || '');
-      const name = String(c.name || id);
-      const page = c.pageName ? String(c.pageName) : '—';
-      const stop = c.stop_time ? String(c.stop_time).slice(0, 10) : '—';
+      const id = String(c.id || '').replace(/[^\w.:\-]/g, '');
+      const name = escapeHtml(String(c.name || id));
+      const page = c.pageName ? escapeHtml(String(c.pageName)) : '—';
+      const stop = c.stop_time ? escapeHtml(String(c.stop_time).slice(0, 10)) : '—';
       const active = id === _selectedCampaignId;
       const check = active ? '<span class="px-2 py-1 rounded-xl bg-red-600 text-white text-[10px] font-black">Sélectionnée</span>' : '';
       const ds = String(c.diffusionStatus || '');
@@ -383,6 +405,8 @@
     }).join('') + `</div>`;
   }
 
+  window.getMetaLiveLastKpis = function () { return _lastKpis; };
+
   function _renderKpis(k) {
     _lastKpis = k || null;
     const box = document.getElementById('meta-live-kpis');
@@ -392,7 +416,7 @@
       <div class="mb-3 flex items-start justify-between gap-3">
         <div>
           <div class="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Campagne</div>
-          <div class="text-sm font-black text-gray-900 dark:text-white">${k.campaignName || '—'}</div>
+          <div class="text-sm font-black text-gray-900 dark:text-white">${escapeHtml(k.campaignName) || '—'}</div>
         </div>
         <button type="button" onclick="const el=document.getElementById('meta-live-client-search'); if(el){ el.focus(); el.scrollIntoView({behavior:'smooth', block:'center'});} return false;" class="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-black text-xs shadow-sm">
           Envoyer KPIs
@@ -405,7 +429,7 @@
         </div>
         <div class="p-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           <div class="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Coût / Résultat</div>
-          <div class="text-xl font-black text-gray-900 dark:text-white">${k.cprFinite ? _fmt(k.costPerResult) : '—'} <span class="text-[11px] font-black text-gray-400">${k.currency}</span></div>
+          <div class="text-xl font-black text-gray-900 dark:text-white">${k.cprFinite ? _fmt(k.costPerResult) : '—'} <span class="text-[11px] font-black text-gray-400">${escapeHtml(k.currency)}</span></div>
         </div>
         <div class="p-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           <div class="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Impressions</div>
@@ -413,13 +437,14 @@
         </div>
         <div class="p-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 md:col-span-2">
           <div class="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Budget consommé</div>
-          <div class="text-xl font-black text-gray-900 dark:text-white">${_fmt(k.spend)} <span class="text-[11px] font-black text-gray-400">${k.currency}</span></div>
+          <div class="text-xl font-black text-gray-900 dark:text-white">${_fmt(k.spend)} <span class="text-[11px] font-black text-gray-400">${escapeHtml(k.currency)}</span></div>
         </div>
         <div class="p-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           <div class="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Date de fin</div>
           <div class="text-xl font-black text-gray-900 dark:text-white">${k.stopDate || '—'}</div>
         </div>
       </div>
+      <div class="mt-3"><button type="button" onclick="openMetaReportPdf && openMetaReportPdf(); return false;" class="px-4 py-2 rounded-xl bg-gray-900 hover:bg-black text-white font-black text-xs"><i class="fas fa-file-pdf mr-1"></i> Rapport PDF client</button></div>
     `;
   }
 
@@ -576,12 +601,12 @@
       .slice(0, 6);
     if (!hits.length) { box.innerHTML = ''; return; }
     box.innerHTML = hits.map(c => {
-      const safeName = c.name.replace(/"/g, '&quot;');
-      const safePhone = c.phone.replace(/"/g, '&quot;');
-      const safeIg = c.instagram.replace(/"/g, '&quot;');
+      const safeName = escapeJsAttr(c.name);
+      const safePhone = escapeJsAttr(c.phone);
+      const safeIg = escapeJsAttr(c.instagram);
       return `<button type="button" onclick="window.selectMetaLiveClient && window.selectMetaLiveClient('${safeName}','${safePhone}','${safeIg}'); return false;" class="w-full text-left border border-gray-200 dark:border-gray-700 rounded-2xl px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 bg-white dark:bg-gray-800">
-        <div class="font-black text-gray-900 dark:text-white">${c.name || 'Client'}</div>
-        <div class="text-[11px] font-black text-gray-400">${c.phone}${c.instagram ? ` • ${c.instagram.replace(/^@/, '@')}` : ''}</div>
+        <div class="font-black text-gray-900 dark:text-white">${escapeHtml(c.name) || 'Client'}</div>
+        <div class="text-[11px] font-black text-gray-400">${escapeHtml(c.phone)}${c.instagram ? ` • ${escapeHtml(c.instagram)}` : ''}</div>
       </button>`;
     }).join('');
   }
@@ -618,6 +643,10 @@
     if (tok) {
       try { tok.value = String(localStorage.getItem(LS_TOKEN) || ''); } catch (e) {}
     }
+    const verLbl = $('meta-live-apiver');
+    if (verLbl) verLbl.textContent = _apiVer();
+    const verIn = $('meta-live-apiver-input');
+    if (verIn) { try { verIn.value = String(localStorage.getItem(LS_API_VER) || ''); } catch (e) {} }
     const since = $('meta-live-since');
     const until = $('meta-live-until');
     if (since && !since.value) since.value = _daysAgoIso(7);

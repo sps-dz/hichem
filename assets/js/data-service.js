@@ -92,7 +92,9 @@ window.normalizeAppState = function() {
 window.saveToLocalStorage = function() {
   const sessionData = {
     session: appState.session || null,
-    adminUid: appState.adminUid || null
+    adminUid: appState.adminUid || null,
+    // Suppressions pas encore confirmées par le cloud : conservées si l'onglet est fermé / coupure réseau
+    pendingDeletions: (appState.sync && Array.isArray(appState.sync.pendingDeletions)) ? appState.sync.pendingDeletions : []
   };
   localStorage.setItem('hichemSponsorSession', JSON.stringify(sessionData));
 };
@@ -107,6 +109,13 @@ window.loadFromLocalStorage = function() {
       const parsed = JSON.parse(raw);
       if (parsed.session) appState.session = parsed.session;
       if (parsed.adminUid) appState.adminUid = parsed.adminUid;
+      if (Array.isArray(parsed.pendingDeletions) && parsed.pendingDeletions.length) {
+        if (!appState.sync) appState.sync = {};
+        if (!Array.isArray(appState.sync.pendingDeletions)) appState.sync.pendingDeletions = [];
+        parsed.pendingDeletions.forEach(d => {
+          if (d && d.col && d.id && !appState.sync.pendingDeletions.some(x => x.col === d.col && x.id === d.id)) appState.sync.pendingDeletions.push(d);
+        });
+      }
     }
   } catch(e) { console.error('Erreur lecture session locale', e); }
   
@@ -130,7 +139,7 @@ window.saveToCloud = async function() {
       globalConfig: appState.globalConfig || null,
       settings: appState.settings || null,
       manualBalances: appState.manualBalances || null,
-      activityLog: (appState.activityLog || []).slice(0, 150),
+      activityLog: (appState.activityLog || []).slice(0, 500),
       lastUpdated: appState.lastUpdated || Date.now()
     }));
     
@@ -141,13 +150,18 @@ window.saveToCloud = async function() {
     
     // Process pending deletions
     if (appState.sync && appState.sync.pendingDeletions && appState.sync.pendingDeletions.length > 0) {
-        const deletePromises = appState.sync.pendingDeletions.map(del => {
-            // Wait, for users/settings and employees, they usually don't have their own granular collection
-            // But if they do, we delete. For safety, let's catch errors individually.
-            return db.collection(del.col).doc(del.id).delete().catch(e => console.error("Del Err", e));
-        });
-        await Promise.all(deletePromises);
-        appState.sync.pendingDeletions = [];
+        // On ne retire de la file QUE les suppressions réellement réussies : une suppression qui échoue
+        // (coupure réseau, droits) est conservée et retentée à la prochaine sauvegarde.
+        const batch = appState.sync.pendingDeletions.slice();
+        const results = await Promise.all(batch.map(del =>
+            db.collection(del.col).doc(del.id).delete()
+              .then(() => ({ del, ok: true }))
+              .catch(e => { console.error("Del Err", e); return { del, ok: false }; })
+        ));
+        const done = new Set(results.filter(r => r.ok).map(r => r.del.col + ':' + r.del.id));
+        results.filter(r => !r.ok).forEach(r => { r.del.tries = (r.del.tries || 0) + 1; });
+        appState.sync.pendingDeletions = (appState.sync.pendingDeletions || []).filter(d =>
+            !done.has(d.col + ':' + d.id) && (d.tries || 0) < 20);
         saveToLocalStorage();
     }
     
@@ -272,7 +286,12 @@ function loadGranularFromCloud() {
 
   collections.forEach(colName => {
     const unsub = db.collection(colName).where('uid', '==', uid).onSnapshot(snapshot => {
-      const data = snapshot.docs.map(d => d.data());
+      let data = snapshot.docs.map(d => d.data());
+      // Sécurité : on ignore les documents dont l'identifiant contient des caractères dangereux
+      if (typeof filterSafeDocs === 'function') data = filterSafeDocs(data, colName);
+      // Un élément supprimé ici mais pas encore supprimé côté cloud ne doit pas réapparaître
+      const pendingDel = (appState.sync && Array.isArray(appState.sync.pendingDeletions)) ? appState.sync.pendingDeletions.filter(d => d.col === colName) : [];
+      if (pendingDel.length) data = data.filter(d => !pendingDel.some(x => x.id === d.id));
       appState[colName] = data;
       
       // Real-time Employee Session Validation

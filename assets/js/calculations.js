@@ -74,14 +74,9 @@ window.calculateTheoreticalBalance = function() {
       if (t.status === 'active' || !t.status) { // Include normal past transactions that didn't have 'status'
         const usdtAmt = Number(t.amount || 0);
         usdt -= usdtAmt;
-        
-        // Also deduct from specific ad account if recorded
-        if (t.adAccountId) {
-            const adAcc = (appState.adAccounts || []).find(a => a.id === t.adAccountId);
-            if (adAcc) {
-                adAcc.spent = (Number(adAcc.spent) || 0) + usdtAmt;
-            }
-        }
+        // NB : le total dépensé par compte pub (adAcc.spent) n'est plus modifié ici. Cette fonction est
+        // appelée très souvent ; y cumuler 'spent' le faisait dériver et provoquait des écritures cloud
+        // inutiles. L'écran « Comptes Pub » le recalcule lui-même à chaque affichage.
       }
   });
 
@@ -113,6 +108,14 @@ window.recalculateFinanceBalances = function() {
 /**
  * Calcule le profit d'une transaction
  */
+// Taux d'achat USD applicable à une vente : le taux figé au moment de la vente s'il existe
+// (nouvelles ventes), sinon le taux global actuel (anciennes ventes : comportement inchangé).
+window.getTransactionBuyRate = function(t) {
+  const own = Number(t && t.buyRate);
+  if (Number.isFinite(own) && own > 0) return own;
+  return typeof getBuyRate === 'function' ? getBuyRate() : 255;
+};
+
 window.calculateTransactionProfit = function(amount, priceDzd, buyRate) {
   const costDzd = amount * buyRate;
   return priceDzd - costDzd;
@@ -182,7 +185,7 @@ window.getProfitSummaryYmd = function(fromYmd, toYmd) {
     const price = Number(t.priceDzd || 0);
     const amt = Number(t.amount || 0);
     revenue += Number.isFinite(price) ? price : 0;
-    cost += (Number.isFinite(amt) ? amt : 0) * buyRate;
+    cost += (Number.isFinite(amt) ? amt : 0) * getTransactionBuyRate(t);
     txCount += 1;
   });
 
@@ -255,7 +258,7 @@ window.getAccrualProfitSummaryYmd = function(fromYmd, toYmd) {
     const price = Number(t.priceDzd || 0);
     const amt = Number(t.amount || 0);
     revenue += Number.isFinite(price) ? price : 0;
-    cost += (Number.isFinite(amt) ? amt : 0) * buyRate;
+    cost += (Number.isFinite(amt) ? amt : 0) * getTransactionBuyRate(t);
     txCount += 1;
   });
 
