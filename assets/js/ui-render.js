@@ -1158,7 +1158,7 @@ window.renderSettingsAdmin = function(container) {
                   <div class="border-t pt-3 mt-1">
                     <div class="text-xs font-bold text-gray-500 mb-2 uppercase">Permissions d'Accès :</div>
                     <div class="flex flex-wrap gap-3">
-                      ${['dashboard', 'clients', 'history', 'todo', 'offers', 'expenses', 'paiements', 'achats', 'reminders', 'ad-accounts', 'requests', 'performance', 'payroll', 'accounting', 'pilotage', 'crm', 'readonly', 'invoiceOptional', 'employees'].map(tab => {
+                      ${['dashboard', 'clients', 'history', 'todo', 'offers', 'expenses', 'paiements', 'achats', 'reminders', 'ad-accounts', 'requests', 'performance', 'payroll', 'accounting', 'pilotage', 'crm', 'care', 'readonly', 'invoiceOptional', 'employees'].map(tab => {
                         const labels = { 
                           dashboard: 'Dashboard', 
                           clients: 'Clients', 
@@ -1176,6 +1176,7 @@ window.renderSettingsAdmin = function(container) {
                           accounting: 'Comptabilité',
                           pilotage: 'Pilotage',
                           crm: 'CRM',
+                          care: 'Relation client',
                           readonly: '🔒 Lecture seule (comptable)',
                           invoiceOptional: '🧾 Envoi de facture facultatif (sinon obligatoire)',
                           employees: 'Employés'

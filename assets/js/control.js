@@ -22,7 +22,7 @@
     'toggleEmployeeActive', 'deleteEmployee', 'importLocalBackup', 'deleteTransaction', 'saveEditTransaction', 'saveBalancesAdjustments', 'addEmployeePerformance', 'confirmOcrSponsors', 'saveClientFromOcr',
     'saveCustomOfferFromOcr', 'saveManualSponsor', 'savePayrollPayment', 'togglePaymentStatus', 'deleteEmployeePayment', 'savePayrollAdvance', 'payrollAdvanceDelete', 'payrollSaveSettings', 'payrollResetSettings', 'payrollAbsenceToggle',
     'accClose', 'accReopen', 'accReconSave', 'accBudgetSet', 'accProfileSave', 'accQuoteCreate', 'accQuoteStatus', 'accQuoteDelete', 'accQuoteConvert', 'accCreditCreate', 'accCreditDelete',
-    'opsRenewSet', 'opsRenewWa', 'opsDebtSave', 'opsDebtWa', 'opsAdThreshold', 'opsGoalSet', 'crmProspectAdd', 'crmProspectStage', 'crmProspectDelete', 'crmProspectConvert', 'crmProspectEdit', 'crmProfileSave', 'crmClientSource', 'crmMerge',
+    'opsRenewSet', 'opsRenewWa', 'opsDebtSave', 'opsDebtWa', 'opsAdThreshold', 'opsGoalSet', 'crmProspectAdd', 'crmProspectStage', 'crmProspectDelete', 'crmProspectConvert', 'crmProspectEdit', 'crmProfileSave', 'crmClientSource', 'crmMerge', 'igLinkSet', 'careSaveSettings', 'careTplSave', 'careTplReset', 'careRate', 'careProofRef', 'igLinkPaste', 'igAssocSave', 'igImportApply',
     'teamSetTitle', 'teamSetManager', 'teamSaveSettings', 'payrollLockMonth', 'payrollUnlockMonth', 'backupRestoreAll', 'backupRecoverMissing', 'backupNow', 'backupDelete', 'setMetaApiVersion', 'openNewClientModal'];
   var _blockedToast = 0;
   function blocked() { if (Date.now() - _blockedToast > 1500) { X.toast('Mode lecture seule : modification impossible', 'warning'); _blockedToast = Date.now(); } return false; }
@@ -69,6 +69,7 @@
       if (unread) add('info', 'fa-inbox', unread + ' demande(s) client non lue(s)', '', 'requests', unread);
       var pros = S.list('prospects').filter(function (p) { return p.nextFollowUp && p.nextFollowUp <= today && p.stage !== 'won' && p.stage !== 'lost'; });
       if (pros.length) add('info', 'fa-filter', pros.length + ' prospect(s) à relancer', pros.map(function (p) { return p.name; }).slice(0, 3).join(', '), 'crm', pros.length);
+      if (typeof window.ClientCareAlerts === 'function') window.ClientCareAlerts(add);
       if (admin) {
         var prev = X.shiftMonth(X.month(), -1);
         if (X.today().slice(8, 10) >= '05' && !(window.isMonthLocked && isMonthLocked(prev)) && ((appState.transactions || []).length)) add('info', 'fa-lock', X.monthLabel(prev) + ' n\'est pas encore clôturé', 'Figez les chiffres du mois', 'accounting');

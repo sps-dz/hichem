@@ -206,12 +206,12 @@
   // =====================================================================
   //  ONGLET
   // =====================================================================
-  var SUBS = [['pipeline', 'Prospects', 'fa-filter'], ['clients', 'Clients & fiches', 'fa-users'], ['dups', 'Doublons', 'fa-clone']];
+  var SUBS = [['pipeline', 'Prospects', 'fa-filter'], ['clients', 'Clients & fiches', 'fa-users'], ['dups', 'Doublons', 'fa-clone'], ['igl', 'Liens Instagram', 'fa-link']];
   window.crmSub = function (s) { ui().sub = s; X.rerender(); };
   X.registerTab('crm', {
     nav: { group: 'pilotage', groupLabel: 'Pilotage & CRM', groupIcon: 'fa-compass', label: 'CRM', icon: 'fa-address-book' },
     render: function (c) {
-      var sub = ui().sub, fn = { pipeline: renderPipeline, clients: renderClients, dups: renderDups }[sub] || renderPipeline;
+      var sub = ui().sub, fn = { pipeline: renderPipeline, clients: renderClients, dups: renderDups, igl: function () { return typeof window.CrmIgRender === 'function' ? window.CrmIgRender() : ''; } }[sub] || renderPipeline;
       c.innerHTML = '<div class="mb-4"><h2 class="text-2xl font-bold text-gray-800 dark:text-white"><i class="fas fa-address-book text-indigo-600 mr-2"></i>CRM</h2><p class="text-xs text-gray-500 mt-1">Prospects, sources d\'acquisition, fiches clients et nettoyage des doublons.</p></div>' + X.pills(SUBS, sub, 'crmSub') + fn();
     }
   });
