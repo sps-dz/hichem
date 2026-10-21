@@ -77,7 +77,7 @@
   function debtorList() { return typeof window.OpsDebtors === 'function' ? OpsDebtors() : []; }
   function lastPurchase(c) {
     var d = '';
-    (appState.transactions || []).forEach(function (t) { if (t && t.clientId === c.id && X.valid(t) && X.isYmd(t.date) && t.date > d) d = t.date; });
+    (appState.transactions || []).forEach(function (t) { if (t && t.clientId === c.id && X.valid(t) && X.isYmd(t.date) && Number(t.priceDzd) > 0 && t.date > d) d = t.date; });
     return d;
   }
   function dormantList() {
@@ -384,9 +384,26 @@
         var cost = usd * rate, pct = (price - cost) / price * 100;
         if (pct < s.minMarginPct) msgs.push((pct < 0 ? '⚠ VENTE À PERTE' : '⚠ MARGE FAIBLE') + ' : prix ' + X.fmt(price) + ', coût estimé ' + X.fmt(cost) + ' (' + X.usd(usd) + ' × ' + rate + ') → marge ' + pct.toFixed(1) + ' % (minimum ' + s.minMarginPct + ' %).');
       }
+      var paidEl = document.getElementById('todoPaid'), accEl = document.getElementById('todoPaidAccount');
+      if (paidEl && paidEl.checked && accEl && accEl.value === 'avance') {
+        var cl = byId(clientId), credit = cl ? Math.max(0, -Number(cl.unpaid || 0)) : 0;
+        if (credit <= 0) msgs.push('⚠ AVANCE : ce client n\'a aucune avance enregistrée. La vente sera comptée entièrement comme dette (aucun argent n\'entre en caisse). Si le client paie maintenant, enregistrez d\'abord son paiement dans « Paiements ».');
+        else if (credit < price) msgs.push('ℹ AVANCE : le client a ' + X.fmt(credit) + ' d\'avance pour une vente de ' + X.fmt(price) + '. Le reste (' + X.fmt(price - credit) + ') restera à payer.');
+      }
       if (msgs.length && !confirm(msgs.join('\n\n') + '\n\nContinuer quand même ?')) { if (ev && ev.preventDefault) ev.preventDefault(); return false; }
     } catch (e) { console.warn('clientcare check', e); }
   });
+
+
+  // affiche l'avance disponible du client dans le formulaire « Nouvelle To-Do »
+  function refreshAdvanceLabel() {
+    var sel = document.getElementById('todoPaidAccount'), cid = (document.getElementById('todoClientId') || {}).value;
+    if (!sel) return; var opt = Array.prototype.filter.call(sel.options, function (o) { return o.value === 'avance'; })[0]; if (!opt) return;
+    var c = cid ? byId(cid) : null, credit = c ? Math.max(0, -Number(c.unpaid || 0)) : 0;
+    opt.textContent = '🧾 Avance du client' + (c ? ' (disponible : ' + X.fmt(credit) + ')' : ' (déjà encaissée)');
+  }
+  document.addEventListener('change', function (e) { if (e.target && e.target.id === 'todoClientId') refreshAdvanceLabel(); });
+  document.addEventListener('ext:rendered', refreshAdvanceLabel);
 
   // reçu proposé après un paiement
   X.wrap('addPayment', function () { window._careBefore = (appState.payments || []).length; }, function () {
@@ -402,6 +419,7 @@
     if (late.length) add('danger', 'fa-clock', late.length + ' commande(s) en retard de traitement', late.map(function (x) { return x.t.clientName; }).slice(0, 3).join(', '), 'care', late.length);
     var bad = (appState.transactions || []).filter(function (t) { return t && t.csat && t.csat <= 2 && Number(t.csatAt || 0) > nowTs() - 14 * 86400000; });
     if (bad.length) add('danger', 'fa-face-frown', bad.length + ' avis client négatif(s) (≤ 2/5)', bad.map(function (t) { return t.clientName; }).slice(0, 3).join(', '), 'care', bad.length);
+    if (window.Integrity && X.isAdmin()) { var ic = Integrity.count(); if (ic) add('warn', 'fa-shield-halved', ic + ' anomalie(s) financière(s) à vérifier', 'Lignes incomplètes ou soldes clients incohérents', 'integrity', ic); }
     var dm = dormantList().filter(function (x) { return !x.recent; });
     if (dm.length) add('info', 'fa-person-walking-arrow-right', dm.length + ' client(s) qui s\'éloignent à relancer', dm.slice(0, 3).map(function (x) { return x.c.name; }).join(', '), 'care', dm.length);
   };

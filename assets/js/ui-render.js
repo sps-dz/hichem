@@ -747,7 +747,7 @@ window.renderClientsTable = function(container) {
 /**
  * Rend l'historique complet des transactions
  */
-// Date de fin d'une transaction (YYYY-MM-DD) : début + (durée - 1) jours, comme sur la facture.
+// Date de fin d'une transaction (YYYY-MM-DD) : début + durée (ex. début 10/10, 5 jours → fin 15/10).
 // Retourne '' si aucune durée n'est connue.
 window.getTransactionEndYmd = function(t) {
   if (!t) return '';
@@ -755,13 +755,13 @@ window.getTransactionEndYmd = function(t) {
   const days = Number(String(t.duration || t.customDurationDays || '').trim());
   const start = /^\d{4}-\d{2}-\d{2}$/.test(String(t.date || '')) ? new Date(`${t.date}T00:00:00`) : null;
   if (start && !isNaN(start.getTime()) && Number.isFinite(days) && days > 0) {
-    start.setDate(start.getDate() + days - 1);
+    start.setDate(start.getDate() + days);
     return toYmdLocal(start);
   }
-  // Repli : endDate (timestamp enregistré à la création) = début + durée → on retire 1 jour
+  // Repli : endDate (timestamp enregistré à la création) = début + durée
   if (t.endDate && Number.isFinite(Number(t.endDate))) {
     const e = new Date(Number(t.endDate));
-    if (!isNaN(e.getTime())) { e.setDate(e.getDate() - 1); return toYmdLocal(e); }
+    if (!isNaN(e.getTime())) { return toYmdLocal(e); }
   }
   return '';
 };
@@ -828,7 +828,7 @@ window.renderTransactionsTable = function(container) {
                     ${t.adAccountId ? (escapeHtml((appState.adAccounts || []).find(a => a.id === t.adAccountId)?.name) || 'Inconnu') : 'Organique'}
                   </span>
                 </td>
-                <td class="p-4 text-right font-mono">${t.amount} $</td>
+                <td class="p-4 text-right font-mono">${(t.amount === undefined || t.amount === null || t.amount === '') ? '—' : t.amount + ' $'}</td>
                 <td class="p-4 text-right font-black text-indigo-600">${formatCurrency(t.priceDzd)}</td>
                 <td class="p-4 text-xs font-semibold text-gray-700 whitespace-nowrap">
                   <i class="fas fa-user text-gray-300 mr-1"></i>${escapeHtml(t.launchedByName) || escapeHtml(t.employeeName) || 'Admin'}
@@ -1789,7 +1789,9 @@ window.renderNewTodoForm = function(container) {
                   <option value="liquide">💵 Liquide</option>
                   <option value="baridimob">🏦 BaridiMob</option>
                   <option value="usdt">🪙 USDT</option>
+                  <option value="avance">🧾 Avance du client (déjà encaissée)</option>
                 </select>
+                <p class="text-[11px] text-gray-500 mt-2">« Avance du client » : à utiliser quand le client a déjà payé d'avance (paiement enregistré dans « Paiements »). Le montant est retiré de son avance, sans compter l'argent une 2<sup>e</sup> fois dans la caisse.</p>
               </div>
             </div>
           </div>

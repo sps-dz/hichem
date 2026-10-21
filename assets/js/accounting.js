@@ -31,7 +31,7 @@
     });
     (appState.transactions || []).forEach(function (t) {
       if (t.status === 'problem') return;
-      if (t.paid) {
+      if (t.paid && t.paidAccount !== 'avance') {
         var acc = t.paidAccount || 'liquide', amt = Number(t.priceDzd || 0), lab = 'Vente encaissée — ' + (t.clientName || '') + ' — ' + (t.offerName || '');
         if (acc === 'baridimob') push('baridimob', t.date, t.createdAt, lab, 'VTE', amt, 0);
         else if (acc === 'usdt') push('usdt', t.date, t.createdAt, lab, 'VTE', amt / rate, 0);

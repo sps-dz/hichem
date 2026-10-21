@@ -426,7 +426,7 @@ window.buildInvoiceHtml = function(tx) {
   const total = fmtDA(tx.priceDzd);
   const paid = !!tx.paid;
 
-  // Durée : "7 jours" + période (du ... au ...) — le dernier jour = début + (durée - 1)
+  // Durée : "7 jours" + période (du ... au ...) — fin = début + durée (cohérent avec l'historique)
   const daysNum = Number(String(tx.duration || tx.customDurationDays || '').trim());
   const hasDays = Number.isFinite(daysNum) && daysNum > 0;
   let durationMain = 'N/A', durationRange = '';
@@ -435,7 +435,7 @@ window.buildInvoiceHtml = function(tx) {
     const start = new Date(baseDate);
     if (!isNaN(start.getTime())) {
       const end = new Date(start.getTime());
-      end.setDate(end.getDate() + daysNum - 1);
+      end.setDate(end.getDate() + daysNum);
       durationRange = `(du ${fmtDay(start)} au ${fmtDay(end)})`;
     }
   } else if (tx.duration) {
@@ -1333,7 +1333,7 @@ window.handleNewTodoSubmit = function(actionMode, event) {
     const tx = { ...todo, id: generateId('tx'), status: 'active', completedAt: Date.now() };
     appState.transactions.push(tx);
     client.totalSpent = (client.totalSpent || 0) + (todo.priceDzd || 0);
-    if (!todo.paid) adjustClientUnpaid(client, todo.priceDzd || 0);
+    if (!todo.paid || todo.paidAccount === 'avance') adjustClientUnpaid(client, todo.priceDzd || 0);
     client.updatedAt = Date.now();
     if (typeof autoSave === 'function') autoSave();
     showToast('Sponsor validé (direct)', 'success');
@@ -1436,7 +1436,7 @@ window.changeTodoStatus = function(id, newStatus, currentType) {
          const client = (appState.clients || []).find(c => c.id === item.clientId);
          if (client) {
            client.totalSpent = (client.totalSpent || 0) + (item.priceDzd || 0);
-           if (!item.paid) adjustClientUnpaid(client, item.priceDzd || 0);
+           if (!item.paid || item.paidAccount === 'avance') adjustClientUnpaid(client, item.priceDzd || 0);
            client.updatedAt = Date.now();
          }
          showToast('Problème résolu, transaction validée', 'success');
@@ -1449,7 +1449,7 @@ window.changeTodoStatus = function(id, newStatus, currentType) {
          const client = (appState.clients || []).find(c => c.id === item.clientId);
          if (client) {
            client.totalSpent = (client.totalSpent || 0) + (item.priceDzd || 0);
-           if (!item.paid) adjustClientUnpaid(client, item.priceDzd || 0);
+           if (!item.paid || item.paidAccount === 'avance') adjustClientUnpaid(client, item.priceDzd || 0);
            client.updatedAt = Date.now();
          }
        }
@@ -1515,6 +1515,7 @@ window.openPaidAccountModal = function(id, currentType) {
       <div class="space-y-2">
         <button onclick="confirmPaidAccount('${id}', '${currentType}', 'liquide')" class="w-full p-4 rounded-xl bg-green-50 hover:bg-green-100 border border-green-200 text-green-700 font-bold flex items-center gap-3">💵 Liquide</button>
         <button onclick="confirmPaidAccount('${id}', '${currentType}', 'baridimob')" class="w-full p-4 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold flex items-center gap-3">🏦 BaridiMob</button>
+        <button onclick="confirmPaidAccount('${id}', '${currentType}', 'avance')" class="w-full p-4 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-bold flex items-center gap-2"><i class="fas fa-receipt"></i> Avance du client (déjà encaissée)</button>
         <button onclick="confirmPaidAccount('${id}', '${currentType}', 'usdt')" class="w-full p-4 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-bold flex items-center gap-3">🪙 USDT</button>
       </div>
       <button onclick="document.getElementById('paidAccountModal').remove()" class="mt-4 w-full py-2 text-gray-500 hover:text-gray-700 font-bold">Annuler</button>
@@ -2343,8 +2344,9 @@ window.saveEditTransaction = function() {
       if (client) {
           client.totalSpent = (client.totalSpent || 0) - oldPrice + priceDzd;
           
-          if (!oldPaid) adjustClientUnpaid(client, -oldPrice);
-          if (!paid) adjustClientUnpaid(client, priceDzd);
+          // Une vente « payée par avance » a consommé l'avance du client : elle compte comme une créance côté solde client
+          if (!oldPaid || t.paidAccount === 'avance') adjustClientUnpaid(client, -oldPrice);
+          if (!paid || t.paidAccount === 'avance') adjustClientUnpaid(client, priceDzd);
           
           client.updatedAt = Date.now();
       }

@@ -18,14 +18,14 @@
   function campaigns() {
     var today = X.today();
     return (appState.transactions || []).filter(function (t) { return t && (t.status === 'active' || !t.status) && X.isYmd(t.date) && daysOf(t) > 0; }).map(function (t) {
-      var end = X.addDays(t.date, daysOf(t) - 1), st = today < t.date ? 'planned' : (today > end ? 'ended' : 'running');
+      var end = X.addDays(t.date, daysOf(t)), st = today < t.date ? 'planned' : (today > end ? 'ended' : 'running');
       return { t: t, start: t.date, end: end, status: st, left: X.daysBetween(today, end), sinceEnd: X.daysBetween(end, today) };
     }).sort(function (a, b) { return a.end.localeCompare(b.end); });
   }
   window.OpsCampaigns = campaigns;
   var CSTAT = { planned: ['Planifiée', 'bg-blue-100 text-blue-700'], running: ['En cours', 'bg-green-100 text-green-700'], ended: ['Terminée', 'bg-gray-100 text-gray-600'] };
   function renewalMsg(t) {
-    var c = X.find(appState.clients, t.clientId) || {}, P = getCompanyProfile(), end = X.addDays(t.date, daysOf(t) - 1);
+    var c = X.find(appState.clients, t.clientId) || {}, P = getCompanyProfile(), end = X.addDays(t.date, daysOf(t));
     return 'Bonjour ' + (t.clientName || c.name || '') + ',\nVotre campagne « ' + (t.offerName || '') + ' » ' + (end < X.today() ? 's\'est terminée le ' : 'se termine le ') + X.fmtDate(end) + '.\nSouhaitez-vous la renouveler pour continuer à profiter de vos résultats ?\n\nMerci de votre confiance — ' + P.name;
   }
   function renderCampaigns() {

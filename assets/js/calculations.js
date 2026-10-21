@@ -27,7 +27,7 @@ window.calculateTheoreticalBalance = function() {
       // Les transactions "Problème" ne sont pas comptées
       if (t.status === 'problem') return;
       
-      if (t.paid) {
+      if (t.paid && t.paidAccount !== 'avance') {   // « avance du client » : l'argent est déjà dans la caisse via le paiement
           // L'argent d'une transaction marquée payée va dans le compte choisi
           // (liquide par défaut si non précisé, pour compatibilité avec les
           // anciennes transactions créées avant l'ajout de cette option).
