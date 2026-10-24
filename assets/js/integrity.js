@@ -40,7 +40,13 @@
     return due - paid;
   }
   function clientGaps() {
-    return clients().map(function (c) { var exp = expectedUnpaid(c), cur = num(c.unpaid); return { c: c, exp: exp, cur: cur, diff: cur - exp }; })
+    var exp = {};                                              // une seule passe (rapide même avec des milliers de lignes)
+    (appState.transactions || []).forEach(function (t) {
+      if (!t || isTaskEntry(t) || !t.clientId || t.status === 'problem') return;
+      if (!t.paid || t.paidAccount === 'avance') exp[t.clientId] = (exp[t.clientId] || 0) + num(t.priceDzd);
+    });
+    (appState.payments || []).forEach(function (p) { if (p && p.clientId) exp[p.clientId] = (exp[p.clientId] || 0) - num(p.amount); });
+    return clients().map(function (c) { var e = exp[c.id] || 0, cur = num(c.unpaid); return { c: c, exp: e, cur: cur, diff: cur - e }; })
       .filter(function (r) { return Math.abs(r.diff) > 1; }).sort(function (a, b) { return Math.abs(b.diff) - Math.abs(a.diff); });
   }
 

@@ -121,7 +121,13 @@
   };
   window.notifGo = function (tab, action) { var p = document.getElementById('notifPanel'); if (p) p.remove(); if (action === 'invoices' && typeof openPendingInvoices === 'function') return openPendingInvoices(); if (typeof showTab === 'function') showTab(tab); };
 
-  document.addEventListener('ext:rendered', refresh);
+  // Les notifications sont calculées APRÈS une courte pause (plus à chaque frappe / clic), en temps libre du navigateur.
+  var _notifTimer = null;
+  function refreshSoon() {
+    clearTimeout(_notifTimer);
+    _notifTimer = setTimeout(function () { if (window.requestIdleCallback) requestIdleCallback(function () { refresh(); }, { timeout: 2000 }); else refresh(); }, 1200);
+  }
+  document.addEventListener('ext:rendered', refreshSoon);
   setInterval(refresh, 60000);
   setTimeout(refresh, 1500);
   window.addEventListener('load', function () { setTimeout(refresh, 800); });

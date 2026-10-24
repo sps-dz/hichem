@@ -54,18 +54,22 @@ window.setListFilter = function(key, value) {
   if (!appState.ui.pages) appState.ui.pages = {};
   appState.ui.filters[key] = (value || '').toString();
   appState.ui.pages[key] = 1;
-  if (typeof renderCurrentTab === 'function') {
-    renderCurrentTab();
-    setTimeout(() => {
-      const input = document.getElementById(`searchInput_${key}`);
-      if (input) {
-        input.focus();
-        const val = input.value;
-        input.value = '';
-        input.value = val;
-      }
-    }, 0);
-  }
+  // Anti-lag : on attend que la frappe se calme (180 ms) avant de redessiner le tableau (une seule fois, pas à chaque lettre)
+  clearTimeout(window.__listFilterTimer);
+  window.__listFilterTimer = setTimeout(() => {
+    if (typeof renderCurrentTab === 'function') {
+      renderCurrentTab();
+      setTimeout(() => {
+        const input = document.getElementById(`searchInput_${key}`);
+        if (input) {
+          input.focus();
+          const val = input.value;
+          input.value = '';
+          input.value = val;
+        }
+      }, 0);
+    }
+  }, 180);
 };
 
 window.applyProfitRange = function() {

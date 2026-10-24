@@ -81,9 +81,12 @@
     return d;
   }
   function dormantList() {
-    var s = cfg(), today = X.today(), out = [];
+    var s = cfg(), today = X.today(), out = [], last = {};
+    (appState.transactions || []).forEach(function (t) {           // dernier achat de chaque client : une seule passe
+      if (t && t.clientId && X.valid(t) && X.isYmd(t.date) && Number(t.priceDzd) > 0 && (!last[t.clientId] || t.date > last[t.clientId])) last[t.clientId] = t.date;
+    });
     clients().forEach(function (c) {
-      var lp = lastPurchase(c); if (!lp) return;
+      var lp = last[c.id]; if (!lp) return;
       var days = X.daysBetween(lp, today); if (days < s.dormantDays) return;
       var m = X.meta(c.id), ping = m.lastDormantPing ? X.daysBetween(String(m.lastDormantPing).slice(0, 10), today) : null;
       out.push({ c: c, last: lp, days: days, ping: ping, value: Number(c.totalSpent || 0), recent: ping !== null && ping < s.pingGapDays });
