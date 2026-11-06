@@ -820,6 +820,8 @@ window.renderTransactionsTable = function(container) {
                 <td class="p-4 whitespace-nowrap">
                   <div class="text-gray-700 font-semibold">${formatDate(t.date)}</div>
                   <div class="text-xs text-gray-400 mt-0.5">${(() => { const e = getTransactionEndYmd(t); return e ? 'Fin : ' + formatDate(e) : 'Fin : —'; })()}</div>
+                  ${(typeof formatTimeHM === 'function' && t.createdAt) ? `<div class="text-[10px] text-gray-400 mt-0.5" title="Heure d'Alger"><i class="far fa-clock mr-1"></i>Saisie ${formatTimeHM(t.createdAt)}${(t.completedAt && Math.abs(t.completedAt - t.createdAt) > 60000) ? ' · validée ' + (formatDate(new Date(t.completedAt).toISOString().slice(0, 10)) !== formatDate(new Date(t.createdAt).toISOString().slice(0, 10)) ? formatDateTimeFR(t.completedAt) : formatTimeHM(t.completedAt)) : ''}</div>` : ''}
+                  ${t.validatedByName ? `<div class="text-[10px] text-indigo-500 mt-0.5"><i class="fas fa-check-double mr-1"></i>Validée par ${escapeHtml(t.validatedByName)}</div>` : ''}
                 </td>
                 <td class="p-4 font-bold">${escapeHtml(t.clientName)}</td>
                 <td class="p-4 text-gray-600">${escapeHtml(t.offerName)}</td>
@@ -898,17 +900,19 @@ window.renderPaymentsTable = function(container) {
               <th class="p-4">Montant</th>
               <th class="p-4">Méthode</th>
               <th class="p-4">Note</th>
+              <th class="p-4">Saisi par</th>
               <th class="p-4 text-center">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y">
             ${pageItems.map(p => `
               <tr class="hover:bg-gray-50">
-                <td class="p-4 text-gray-500">${formatDate(p.date)}</td>
+                <td class="p-4 text-gray-500 whitespace-nowrap">${formatDate(p.date)}${(typeof formatTimeHM === 'function' && p.createdAt) ? `<div class="text-[11px] text-gray-400" title="Heure d'Alger"><i class="far fa-clock mr-1"></i>${formatTimeHM(p.createdAt)}</div>` : ''}</td>
                 <td class="p-4 font-bold">${escapeHtml(p.clientName)}</td>
                 <td class="p-4 font-black text-green-600">${formatCurrency(p.amount)}</td>
                 <td class="p-4 text-gray-600">${escapeHtml(p.method)}</td>
                 <td class="p-4 text-gray-400 italic text-xs max-w-xs truncate">${escapeHtml(p.note) || '-'}</td>
+                <td class="p-4 text-xs font-semibold text-gray-700 whitespace-nowrap">${p.createdByName ? '<i class="fas fa-user text-gray-300 mr-1"></i>' + escapeHtml(p.createdByName) : '<span class="text-gray-300">—</span>'}</td>
                 <td class="p-4 text-center">
                    <button onclick="deletePayment('${p.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash-alt"></i></button>
                 </td>

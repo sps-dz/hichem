@@ -55,6 +55,7 @@
     var out = [], today = X.today(), cl = {}; clients().forEach(function (c) { cl[c.id] = c; });
     (appState.transactions || []).forEach(function (t) {
       if (!t || isTaskEntry(t)) return;
+      if (t.status === 'completed' && (t.totalDzd || t.dollarAmount)) return;   // ancien format : voir l'onglet « Anciennes ventes »
       var why = [];
       if (!t.clientId || !cl[t.clientId]) why.push(t.clientId ? 'client introuvable' : 'sans client');
       if (!(num(t.priceDzd) > 0)) why.push('sans prix');
@@ -86,6 +87,23 @@
     return out;
   }
 
+  // ------------------------------------------------------------------ 4) taux des achats USD (plage plausible 240–265 DA)
+  var RATE_MIN = 240, RATE_MAX = 265, RATE_FIX = 252;
+  function rateIssues() {
+    return (appState.usdPurchases || []).filter(Boolean).map(function (u) {
+      var r = num(u.rate), a = num(u.amount), t = num(u.totalDzd), why = [];
+      if (!(r >= RATE_MIN && r <= RATE_MAX)) why.push('taux ' + r + ' hors de ' + RATE_MIN + '–' + RATE_MAX);
+      if (Math.abs(a * r - t) > 1) why.push('total ≠ montant × taux (' + X.fmt(t) + ' au lieu de ' + X.fmt(a * r) + ')');
+      return why.length ? { u: u, why: why, extreme: (r < 100 || r > 1000) } : null;
+    }).filter(Boolean);
+  }
+  // ------------------------------------------------------------------ 5) anciennes ventes (status « completed », ancien format) : aperçu lecture seule
+  function legacySales() {
+    var ls = (appState.transactions || []).filter(function (t) { return t && t.status === 'completed'; });
+    var dzd = 0, usd = 0; ls.forEach(function (t) { dzd += num(t.totalDzd || t.priceDzd); usd += num(t.dollarAmount || t.amount); });
+    return { n: ls.length, dzd: dzd, usd: usd };
+  }
+
   // ------------------------------------------------------------------ actions
   window.integDelete = function (kind, id) {
     if (ro()) return X.toast('Mode lecture seule : modification impossible', 'warning');
@@ -108,24 +126,43 @@
     if (window.BackupCore && BackupCore.createSnapshot) BackupCore.createSnapshot('pre-restore', 'Avant alignement du solde de ' + c.name).then(apply, function () { if (confirm('La sauvegarde de sécurité a échoué. Continuer quand même ?')) apply(); });
     else apply();
   };
+  window.integFixRate = function (id) {
+    if (!X.isAdmin() || ro()) return X.toast('Réservé à l\'administrateur', 'error');
+    var list = rateIssues().filter(function (r) { return id ? r.u.id === id : r.extreme; });   // « tout corriger » ne touche que les taux absurdes (<100 ou >1000)
+    if (!list.length) return X.toast('Rien à corriger', 'info');
+    var msg = list.map(function (r) { return '• ' + X.fmtDate(r.u.date) + ' · ' + num(r.u.amount) + ' $ : taux ' + num(r.u.rate) + ' → ' + RATE_FIX + ' (total ' + X.fmt(num(r.u.totalDzd)) + ' → ' + X.fmt(num(r.u.amount) * RATE_FIX) + ' DA)'; }).join('\n');
+    if (!confirm('Corriger ' + list.length + ' achat(s) USD au taux ' + RATE_FIX + ' DA ?\n\n' + msg + '\n\nUne sauvegarde de sécurité est créée avant.')) return;
+    var apply = function () {
+      list.forEach(function (r) {
+        var u = r.u, before = num(u.rate) + ' / ' + X.fmt(num(u.totalDzd));
+        u.rate = RATE_FIX; u.totalDzd = num(u.amount) * RATE_FIX; u.updatedAt = Date.now();
+        X.log('Taux achat USD corrigé', X.fmtDate(u.date) + ' · ' + num(u.amount) + ' $ : ' + before + ' → ' + RATE_FIX + ' / ' + X.fmt(u.totalDzd));
+      });
+      if (typeof recalculateFinanceBalances === 'function') recalculateFinanceBalances();
+      X.save(); X.toast(list.length + ' achat(s) corrigé(s)', 'success'); X.rerender();
+    };
+    if (window.BackupCore && BackupCore.createSnapshot) BackupCore.createSnapshot('pre-restore', 'Avant correction des taux d\'achats USD').then(apply, function () { if (confirm('La sauvegarde de sécurité a échoué. Continuer quand même ?')) apply(); });
+    else apply();
+  };
   window.integCsv = function () {
     var rows = [['Type', 'Libellé', 'Date', 'Montant', 'Problèmes']];
     anomalies().forEach(function (a) { rows.push([a.kind, a.label, a.date || '', a.amount === undefined ? '' : a.amount, a.why.join(' ; ')]); });
     clientGaps().forEach(function (g) { rows.push(['solde', g.c.name, '', g.cur, 'recalculé ' + Math.round(g.exp) + ' (écart ' + Math.round(g.diff) + ')']); });
+    rateIssues().forEach(function (r) { rows.push(['achat USD', X.fmtDate(r.u.date) + ' · ' + num(r.u.amount) + ' $', r.u.date || '', r.u.totalDzd, r.why.join(' ; ')]); });
     X.csv(rows, 'controle-financier.csv');
   };
 
   // ------------------------------------------------------------------ rendu
   var KIND = { tx: 'Transaction', todo: 'To-Do', pay: 'Paiement' };
   function renderSummary() {
-    var cash = cashRows(), an = anomalies(), gaps = clientGaps(), bad = an.length + gaps.length;
+    var cash = cashRows(), an = anomalies(), gaps = clientGaps(), rt = rateIssues(), bad = an.length + gaps.length + rt.length;
     var rows = cash.map(function (r) {
       return '<tr><td class="p-3 font-bold text-gray-800 dark:text-white">' + E(r.label) + '</td><td class="p-3 text-right font-mono">' + money(r.theo, r.unit) + '</td><td class="p-3 text-right font-mono ' + (r.manual ? 'text-amber-600 font-bold' : 'text-gray-400') + '">' + money(r.manual, r.unit) + '</td>' +
         '<td class="p-3 text-right font-mono font-black">' + money(r.shown, r.unit) + '</td><td class="p-3 text-center">' + (Math.abs(r.gap) < 0.5 ? '<span class="text-green-600 font-black text-xs">OK</span>' : '<span class="text-red-600 font-black text-xs">écart ' + money(r.gap, r.unit) + '</span>') + '</td></tr>';
     }).join('');
     var nTx = (appState.transactions || []).filter(function (t) { return t && !isTaskEntry(t) && t.status !== 'problem'; }).length;
-    return '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">' + X.kpi('Anomalies', String(an.length), an.length ? 'text-red-600' : 'text-green-600', 'fa-triangle-exclamation') + X.kpi('Soldes clients à vérifier', String(gaps.length), gaps.length ? 'text-amber-600' : 'text-green-600', 'fa-scale-unbalanced') +
-      X.kpi('Ventes contrôlées', String(nTx), '', 'fa-receipt') + X.kpi('Paiements contrôlés', String((appState.payments || []).length), '', 'fa-money-bill-wave') + '</div>' +
+    return '<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">' + X.kpi('Anomalies', String(an.length), an.length ? 'text-red-600' : 'text-green-600', 'fa-triangle-exclamation') + X.kpi('Soldes clients à vérifier', String(gaps.length), gaps.length ? 'text-amber-600' : 'text-green-600', 'fa-scale-unbalanced') +
+      X.kpi('Taux USD hors plage', String(rt.length), rt.length ? 'text-red-600' : 'text-green-600', 'fa-dollar-sign') + X.kpi('Ventes contrôlées', String(nTx), '', 'fa-receipt') + X.kpi('Paiements contrôlés', String((appState.payments || []).length), '', 'fa-money-bill-wave') + '</div>' +
       (bad ? '' : '<div class="p-4 mb-4 rounded-2xl bg-green-50 border border-green-200 text-green-700 text-sm font-bold"><i class="fas fa-circle-check mr-2"></i>Aucune anomalie détectée : les chiffres sont cohérents.</div>') +
       X.card('Caisses : reconstitution', 'fa-vault', '<p class="text-xs text-gray-500 mb-3">Solde théorique = paiements reçus + ventes encaissées − frais − achats. Le solde affiché y ajoute vos <b>ajustements manuels</b> (en orange). Un « écart » signalerait une incohérence de calcul.</p>' +
         X.table([['Caisse'], ['Théorique', 'r'], ['Ajustement manuel', 'r'], ['Solde affiché', 'r'], ['Contrôle', 'c']], rows, {}));
@@ -148,15 +185,31 @@
     return X.card('Soldes clients à vérifier', 'fa-scale-unbalanced', '<p class="text-xs text-gray-500 mb-3">Solde recalculé = ventes validées non payées (ou payées par avance) − paiements reçus. Un écart peut être normal (dette initiale reprise, ajustement manuel) ou venir d\'une erreur. « Aligner » remplace le solde par la valeur recalculée, après sauvegarde.</p>' +
       X.table([['Client'], ['Solde actuel', 'r'], ['Recalculé', 'r'], ['Écart', 'r'], ['', 'r']], rows, { empty: 'Tous les soldes sont cohérents 🎉' }));
   }
-  var SUBS = [['summary', 'Synthèse', 'fa-vault'], ['anomalies', 'Lignes anormales', 'fa-triangle-exclamation'], ['balances', 'Soldes clients', 'fa-scale-unbalanced']];
+  function renderRates() {
+    var iss = rateIssues(), admin = X.isAdmin() && !ro();
+    var rows = iss.map(function (r) {
+      var u = r.u;
+      return '<tr><td class="p-3 text-xs whitespace-nowrap">' + X.fmtDate(u.date) + '</td><td class="p-3 font-mono text-right">' + X.usd(num(u.amount)) + '</td><td class="p-3 font-mono text-right text-red-600 font-black">' + num(u.rate) + '</td><td class="p-3 font-mono text-right">' + X.fmt(num(u.totalDzd)) + '</td>' +
+        '<td class="p-3 text-[11px] ' + (r.extreme ? 'text-red-600' : 'text-amber-600') + '">' + E(r.why.join(' · ')) + (r.extreme ? '' : ' — taux plausible : à vérifier avant de corriger') + '</td><td class="p-3 text-right">' + (admin ? '<button type="button" data-id="' + E(u.id) + '" onclick="integFixRate(this.dataset.id)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100">Mettre à ' + RATE_FIX + '</button>' : '') + '</td></tr>';
+    }).join('');
+    return X.card('Taux des achats USD', 'fa-dollar-sign', '<p class="text-xs text-gray-500 mb-3">Un achat dont le taux sort de la plage <b>' + RATE_MIN + ' – ' + RATE_MAX + ' DA</b> (ou dont le total ne correspond pas à montant × taux) fausse la caisse. Le bouton remplace le taux par <b>' + RATE_FIX + '</b> et recalcule le total, après sauvegarde. Si le vrai taux est différent, modifiez plutôt la ligne dans « Achats USD ».</p>' +
+      X.table([['Date'], ['Montant', 'r'], ['Taux', 'r'], ['Total DA', 'r'], ['Problème'], ['', 'r']], rows, { empty: 'Tous les taux sont dans la plage ' + RATE_MIN + '–' + RATE_MAX + ' 🎉' }),
+      (admin && iss.filter(function (r) { return r.extreme; }).length > 1 ? X.btn('Corriger les taux absurdes à ' + RATE_FIX + ' (' + iss.filter(function (r) { return r.extreme; }).length + ')', 'integFixRate()', 'bg-indigo-600 text-white hover:bg-indigo-700', 'fa-wand-magic-sparkles') : ''));
+  }
+  function renderLegacy() {
+    var L = legacySales();
+    return X.card('Anciennes ventes (ancien format)', 'fa-clock-rotate-left', '<p class="text-xs text-gray-500 mb-3">Ces ventes datent d\'une ancienne version (champs <i>dollarAmount</i> / <i>totalDzd</i>, statut « completed »). Les calculs de caisse les ignorent. <b>Aperçu en lecture seule</b> : rien n\'est modifié. Les compter retirerait leurs dollars du stock USDT (qui est déjà négatif) ; il faut d\'abord confirmer que ces dollars ont bien été achetés avant de les convertir.</p>' +
+      '<div class="grid grid-cols-3 gap-3">' + X.kpi('Ventes concernées', String(L.n), '', 'fa-receipt') + X.kpi('Total DA', X.fmt(L.dzd), '', 'fa-coins') + X.kpi('Total USD', X.usd(L.usd), '', 'fa-dollar-sign') + '</div>');
+  }
+  var SUBS = [['summary', 'Synthèse', 'fa-vault'], ['anomalies', 'Lignes anormales', 'fa-triangle-exclamation'], ['balances', 'Soldes clients', 'fa-scale-unbalanced'], ['rates', 'Taux USD', 'fa-dollar-sign'], ['legacy', 'Anciennes ventes', 'fa-clock-rotate-left']];
   window.integSub = function (s) { ui.sub = s; X.rerender(); };
   X.registerTab('integrity', {
     nav: { group: 'pilotage', groupLabel: 'Pilotage & CRM', groupIcon: 'fa-compass', label: 'Contrôle financier', icon: 'fa-shield-halved' },
     render: function (c) {
       if (!X.isAdmin()) { c.innerHTML = '<p class="text-center py-8 text-gray-500">Réservé à l\'administrateur</p>'; return; }
-      var fn = { summary: renderSummary, anomalies: renderAnomalies, balances: renderBalances }[ui.sub] || renderSummary;
+      var fn = { summary: renderSummary, anomalies: renderAnomalies, balances: renderBalances, rates: renderRates, legacy: renderLegacy }[ui.sub] || renderSummary;
       c.innerHTML = '<div class="mb-4"><h2 class="text-2xl font-bold text-gray-800 dark:text-white"><i class="fas fa-shield-halved text-indigo-600 mr-2"></i>Contrôle financier</h2><p class="text-xs text-gray-500 mt-1">Vérifie que caisses, soldes clients, ventes et paiements sont cohérents.</p></div>' + X.pills(SUBS, ui.sub, 'integSub') + fn();
     }
   });
-  window.Integrity = { count: function () { try { return anomalies().length + clientGaps().length; } catch (e) { return 0; } }, anomalies: anomalies, clientGaps: clientGaps, cash: cashRows };
+  window.Integrity = { count: function () { try { return anomalies().length + clientGaps().length + rateIssues().length; } catch (e) { return 0; } }, anomalies: anomalies, clientGaps: clientGaps, cash: cashRows };
 })();
