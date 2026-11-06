@@ -11,7 +11,15 @@
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3233/3233483.png">
 
   <!-- External Libraries -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Styles : par défaut Tailwind CDN (comportement d'origine). Option plus rapide : ouvrir le site avec ?css=static (retour : ?css=cdn) -->
+  <script>
+    (function () {
+      var useStatic = false;
+      try { var q = location.search.match(/[?&]css=(static|cdn)/); if (q) localStorage.setItem('crm_css', q[1]); useStatic = localStorage.getItem('crm_css') === 'static'; } catch (e) {}
+      if (useStatic) document.write('<link rel="stylesheet" href="assets/css/tailwind.static.css?v=1">');
+      else document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link
@@ -1211,8 +1219,14 @@
   <script src="assets/js/operations.js?v=1"></script>
   <script src="assets/js/crm.js?v=2"></script>
   <script src="assets/js/instagram-links.js?v=1"></script>
+  <script src="assets/js/stamps.js?v=1"></script>
   <script src="assets/js/clientcare.js?v=2"></script>
   <script src="assets/js/integrity.js?v=1"></script>
+  <script src="assets/js/myfinance.js?v=1"></script>
+  <script src="assets/js/finance-help.js?v=1"></script>
+  <script src="assets/js/guards.js?v=1"></script>
+  <script src="assets/js/daily.js?v=1"></script>
+  <script src="assets/js/clientprofit.js?v=1"></script>
   <script src="assets/js/control.js?v=1"></script>
   <script src="assets/js/nav-groups.js?v=36"></script>
   <script src="assets/js/client-space.js?v=38"></script>

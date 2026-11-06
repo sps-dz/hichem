@@ -3,7 +3,7 @@
 // où une ancienne version mise en cache (CSS/JS) s'affichait tant que le
 // cache n'était pas invalidé manuellement. Le nom de cache est aussi changé
 // pour purger automatiquement l'ancien cache v5 chez tous les utilisateurs.
-const CACHE_NAME = 'sponsor-crm-cache-v13';
+const CACHE_NAME = 'sponsor-crm-cache-v17';
 const urlsToCache = [
   './',
   './index.html',
@@ -36,8 +36,15 @@ const urlsToCache = [
   './assets/js/operations.js',
   './assets/js/crm.js',
   './assets/js/instagram-links.js',
+  './assets/js/stamps.js',
   './assets/js/clientcare.js',
   './assets/js/integrity.js',
+  './assets/js/myfinance.js',
+  './assets/js/finance-help.js',
+  './assets/css/tailwind.static.css',
+  './assets/js/guards.js',
+  './assets/js/daily.js',
+  './assets/js/clientprofit.js',
   './assets/js/control.js'
 ];
 
