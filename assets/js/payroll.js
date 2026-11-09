@@ -130,7 +130,7 @@
     }).join('') : '<p class="text-sm text-gray-400 italic">Aucune avance en cours.</p>';
     var emps = (appState.employees || []).filter(function (e) { return e.active !== false; });
     var empOpts = emps.map(function (e) { return '<option value="' + esc(e.id) + '">' + esc(e.name || e.login) + '</option>'; }).join('');
-    return '<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-8">' +
+    return '<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-8">' + (window.PrimeRules ? PrimeRules.panel() + PrimeRules.history(12) : '') +
       '<div class="rounded-2xl border dark:border-gray-700 p-4"><h4 class="font-bold text-gray-800 dark:text-white mb-1"><i class="fas fa-sliders text-indigo-500 mr-2"></i>Paramètres de paie</h4><p class="text-[11px] text-gray-400 mb-3">Tarif par tâche et barème des primes de performance (valable pour tout le projet).</p>' +
         '<label class="text-xs font-bold text-gray-500">Tarif par tâche (DA)</label><input id="ps-rate" type="number" value="' + esc(cfg.ratePerTask) + '" class="' + inp + ' w-full mb-3">' +
         '<div class="text-xs font-bold text-gray-500 mb-1">Barème : gain ≥ seuil → prime</div>' + scale.map(function (t, i) { return '<div class="flex gap-2 mb-2"><input id="ps-min' + i + '" type="number" placeholder="seuil (DA)" value="' + esc(t.min) + '" class="' + inp + ' w-1/2"><input id="ps-bonus' + i + '" type="number" placeholder="prime (DA)" value="' + esc(t.bonus) + '" class="' + inp + ' w-1/2"></div>'; }).join('') +
@@ -204,6 +204,12 @@
     });
     var perfGain = tasks * rate;
     var perfPrime = (typeof getPrimeForGain === 'function') ? getPrimeForGain(perfGain) : perfPrimeFor(perfGain);
+    var primeTasks = tasks, teamTasksN = 0, primeInfo = null;
+    if (window.PrimeRules) {                                        // règle de prime d'équipe (voir primes.js)
+      var mr = Ext.monthRange(month);
+      primeInfo = PrimeRules.forRange(emp.id, mr.from, mr.to, rate);
+      perfGain = primeInfo.gain; perfPrime = primeInfo.prime; primeTasks = primeInfo.tasks; teamTasksN = primeInfo.teamTasks || 0;
+    }
 
     var pays = payments().filter(function (p) {
       return p && p.employeeId === emp.id && payPeriod(p) === month && p.id !== excludePaymentId;
@@ -230,7 +236,7 @@
 
     // Prime d'encadrement : calculée sur les tâches de l'équipe (désactivée par défaut) — jamais additionnée aux tâches globales
     var lead = (window.TeamOrg && TeamOrg.teamBonus) ? TeamOrg.teamBonus(emp.id, month) : { total: 0, teamTasks: 0 };
-    var leadBonus = Number(lead.total) || 0;
+    var leadBonus = (window.PrimeRules && !PrimeRules.useTeamBonus()) ? 0 : (Number(lead.total) || 0);
     var gross = base + perfPrime + leadBonus + bonus;
     var net = Math.max(0, gross - absDeduction - advDeduction);
     var remaining = net - paid;
@@ -243,7 +249,7 @@
     else status = 'settled';
 
     return {
-      emp: emp, month: month, base: base, tasks: tasks, rate: rate, perfGain: perfGain, perfPrime: perfPrime,
+      emp: emp, month: month, base: base, tasks: tasks, primeTasks: primeTasks, teamTasks: teamTasksN, primeInfo: primeInfo, rate: rate, perfGain: perfGain, perfPrime: perfPrime,
       bonus: bonus, leadBonus: leadBonus, lead: lead, title: emp.title || '', managerId: emp.managerId || '', gross: gross, absDays: absDays, justified: justified, absDeduction: absDeduction, advDeduction: advDeduction, advList: advList, daily: base / 30,
       net: net, paid: paid, pending: pending, extraPaid: extraPaid, remaining: remaining,
       status: status, pays: pays
@@ -260,7 +266,7 @@
   function computePayroll(emp, month, excludePaymentId) {
     var r = computePayrollLive(emp, month, excludePaymentId), lock = lockOf(month), f = lock && lock.rows && lock.rows[emp.id];
     if (!f) return r;
-    ['base', 'tasks', 'rate', 'perfGain', 'perfPrime', 'leadBonus', 'lead', 'absDays', 'justified', 'absDeduction', 'advDeduction', 'advList', 'title', 'managerId'].forEach(function (k) { if (f[k] !== undefined) r[k] = f[k]; });
+    ['base', 'tasks', 'primeTasks', 'teamTasks', 'primeInfo', 'rate', 'perfGain', 'perfPrime', 'leadBonus', 'lead', 'absDays', 'justified', 'absDeduction', 'advDeduction', 'advList', 'title', 'managerId'].forEach(function (k) { if (f[k] !== undefined) r[k] = f[k]; });
     r.daily = r.base / 30; r.gross = r.base + r.perfPrime + r.leadBonus + r.bonus; r.net = Math.max(0, r.gross - r.absDeduction - r.advDeduction);
     r.remaining = r.net - r.paid; r.status = statusOf(r.net, r.paid, r.remaining); r.locked = true; r.lockedAt = lock.lockedAt;
     return r;
@@ -273,7 +279,7 @@
     var rows = {};
     payrollEmployees(m).forEach(function (e) {
       var r = computePayrollLive(e, m);
-      rows[e.id] = { base: r.base, tasks: r.tasks, rate: r.rate, perfGain: r.perfGain, perfPrime: r.perfPrime, leadBonus: r.leadBonus, lead: r.lead, absDays: r.absDays, justified: r.justified, absDeduction: r.absDeduction, advDeduction: r.advDeduction, advList: r.advList, title: r.title, managerId: r.managerId };
+      rows[e.id] = { base: r.base, tasks: r.tasks, primeTasks: r.primeTasks, teamTasks: r.teamTasks, primeInfo: r.primeInfo, rate: r.rate, perfGain: r.perfGain, perfPrime: r.perfPrime, leadBonus: r.leadBonus, lead: r.lead, absDays: r.absDays, justified: r.justified, absDeduction: r.absDeduction, advDeduction: r.advDeduction, advList: r.advList, title: r.title, managerId: r.managerId };
     });
     ExtStore.map('payrollLocks')[m] = { lockedAt: Date.now(), by: actorName(), rows: rows };
     log('Paie figée', monthLabel(m) + ' — ' + Object.keys(rows).length + ' salarié(s)'); save(); toast('Paie figée', 'success'); window.refreshPayroll();
@@ -416,7 +422,7 @@
                 var id = esc(r.emp.id);
                 return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/40">' +
                   '<td class="p-3"><div class="font-bold text-gray-800 dark:text-white">' + esc(r.emp.name || r.emp.login) + '</div>' +
-                    '<div class="text-[11px] text-gray-400">' + (r.title ? esc(r.title) + ' · ' : '') + r.tasks + ' tâche(s)' + (r.emp.active === false ? ' · inactif' : '') + (r.locked ? ' · <i class="fas fa-lock"></i> figée' : '') + '</div></td>' +
+                    '<div class="text-[11px] text-gray-400">' + (r.title ? esc(r.title) + ' · ' : '') + r.tasks + ' tâche(s)' + (r.teamTasks ? ' +' + r.teamTasks + ' équipe' : '') + (r.emp.active === false ? ' · inactif' : '') + (r.locked ? ' · <i class="fas fa-lock"></i> figée' : '') + '</div></td>' +
                   '<td class="p-3 text-right font-mono text-gray-700 dark:text-gray-300">' + nf(r.base) + '</td>' +
                   '<td class="p-3 text-right font-mono text-green-700">' + (r.perfPrime ? '+' + nf(r.perfPrime) : '—') + '</td>' +
                   '<td class="p-3 text-right font-mono text-purple-700">' + (r.leadBonus ? '+' + nf(r.leadBonus) + ' <span class="text-[10px] text-gray-400">(' + (r.lead && r.lead.teamTasks || 0) + ' t.)</span>' : '—') + '</td>' +
@@ -953,8 +959,12 @@
     };
     var bonusList = r.pays.filter(function (p) { return payType(p) === 'prime'; });
     var lines = line('Salaire de base', 'Mensuel (30 jours)', nf(r.base), '');
-    lines += line('Prime de performance', r.tasks + ' tâche(s) × ' + nf(r.rate) + ' = ' + fmt(r.perfGain), r.perfPrime ? nf(r.perfPrime) : '—', '');
-    lines += line("Prime d'encadrement d'équipe", r.lead && r.lead.teamTasks ? r.lead.teamTasks + " tâche(s) d'équipe" + (r.lead.rateBonus ? ' × commission' : '') + (r.lead.scaleBonus ? ' + palier' : '') + (r.lead.targetBonus ? ' + objectif atteint' : '') : '—', r.leadBonus ? nf(r.leadBonus) : '—', '');
+    var pi = r.primeInfo, leadMode = !!(window.PrimeRules && PrimeRules.mode() === 'lead' && pi);
+    if (leadMode && pi.role === 'lead') lines += line("Prime du chargé d'équipe", pi.tasks + ' point(s) d\'équipe' + (pi.orphans ? ' (dont ' + pi.orphans + ' non attribué(s))' : '') + ' → barème', r.perfPrime ? nf(r.perfPrime) : '—', '');
+    else if (leadMode && pi.role === 'member') lines += line("Prime d'équipe", "Résultats de l'équipe du mois", r.perfPrime ? nf(r.perfPrime) : '—', '');
+    else if (leadMode) lines += line('Prime', 'aucune (pas dans une équipe)', '—', '');
+    else lines += line('Prime de performance', (r.primeTasks !== undefined ? r.primeTasks : r.tasks) + ' tâche(s) × ' + nf(r.rate) + ' = ' + fmt(r.perfGain), r.perfPrime ? nf(r.perfPrime) : '—', '');
+    lines += line("Prime d'encadrement d'équipe", r.leadBonus && r.lead && r.lead.teamTasks ? r.lead.teamTasks + " tâche(s) d'équipe" + (r.lead.rateBonus ? ' × commission' : '') + (r.lead.scaleBonus ? ' + palier' : '') + (r.lead.targetBonus ? ' + objectif atteint' : '') : '—', r.leadBonus ? nf(r.leadBonus) : '—', '');
     lines += line('Primes exceptionnelles', bonusList.length ? bonusList.map(function (p) { return esc(p.description || 'Prime'); }).join(', ') : '—', r.bonus ? nf(r.bonus) : '—', '');
     lines += line('Retenue pour absences', r.absDays + ' jour(s) × ' + nf(r.daily) + ' DA' + (r.justified ? ' (' + r.justified + ' justifiée(s) non retenue(s))' : ''), '', r.absDeduction ? nf(r.absDeduction) : '—');
     lines += line('Retenue avance sur salaire', r.advList.length ? r.advList.map(function (a) { return 'remboursement sur ' + a.months + ' mois'; }).join(', ') : '—', '', r.advDeduction ? nf(r.advDeduction) : '—');

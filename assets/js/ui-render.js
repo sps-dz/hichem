@@ -2374,7 +2374,7 @@ window.renderEmployeePerformance = function(container) {
     const teamTasks = (window.TeamOrg && id !== 'unassigned') ? TeamOrg.teamTasks(id, ui.startDate, ui.endDate) : 0;
     const gain = tasks * config.ratePerTask;
     const share = gain * 0.3;
-    const prime = calculPrime(gain);
+    const prime = window.PrimeRules ? PrimeRules.forRange(id, ui.startDate, ui.endDate, config.ratePerTask).prime : calculPrime(gain);
     const net = gain
       - config.fixedCosts.salary
       - config.fixedCosts.internet
@@ -2384,7 +2384,7 @@ window.renderEmployeePerformance = function(container) {
     
     return {
       id,
-      name: emp ? emp.name : (id === 'unassigned' ? 'Non attribué' : id),
+      name: emp ? emp.name : (id === 'unassigned' ? (window.PrimeRules ? PrimeRules.directorLabel() : 'Non attribué') : id),
       today: stats.today,
       yesterday: stats.yesterday,
       week: stats.week,

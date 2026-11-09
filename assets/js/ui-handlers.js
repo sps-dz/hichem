@@ -3013,7 +3013,7 @@ window.exportPerformanceCSV = function() {
     const tasks = counts[id];
     const gain = tasks * config.ratePerTask;
     const share = gain * 0.3;
-    const prime = calculPrime(gain);
+    const prime = window.PrimeRules ? PrimeRules.forRange(id, '0000-01-01', '9999-12-31', config.ratePerTask).prime : calculPrime(gain);
     const net = gain
       - config.fixedCosts.salary
       - config.fixedCosts.internet
@@ -3022,7 +3022,7 @@ window.exportPerformanceCSV = function() {
       - prime;
 
     return {
-      name: emp ? emp.name : 'Non attribué',
+      name: emp ? emp.name : (window.PrimeRules ? PrimeRules.directorLabel() : 'Non attribué'),
       tasks,
       gain,
       share,
