@@ -50,6 +50,49 @@
     return out || '<span class="text-[11px] text-gray-400">Pas de contact</span>';
   }
 
+  // ---------------------------------------------------------------- création rapide d'un NOUVEAU client (même structure que l'onglet Clients)
+  function ncPanel(p) {
+    return '<div class="flex justify-end mb-3">' + X.btn('Nouveau client', 'stuNcToggle(\'' + p + '\')', 'bg-green-600 text-white hover:bg-green-700', 'fa-user-plus') + '</div>' +
+      '<div id="' + p + 'Nc" class="hidden mb-4 p-4 rounded-2xl border-2 border-green-200 bg-green-50 dark:bg-gray-900 dark:border-green-800">' +
+      '<div class="text-xs font-black uppercase text-green-700 mb-2"><i class="fas fa-user-plus mr-1"></i>Nouveau client</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-4 gap-3">' +
+      '<label class="text-xs font-bold text-gray-600">Nom<input id="' + p + 'NcName" class="' + X.input + ' w-full mt-1" placeholder="Nom du client"></label>' +
+      '<label class="text-xs font-bold text-gray-600">Téléphone<input id="' + p + 'NcPhone" class="' + X.input + ' w-full mt-1" placeholder="05 / 06 / 07 …"></label>' +
+      '<label class="text-xs font-bold text-gray-600">Instagram (optionnel)<input id="' + p + 'NcIg" class="' + X.input + ' w-full mt-1" placeholder="@compte"></label>' +
+      '<label class="text-xs font-bold text-gray-600">Note (optionnel)<input id="' + p + 'NcNote" class="' + X.input + ' w-full mt-1"></label></div>' +
+      '<div class="mt-3 flex gap-2">' + X.btn('Créer le client', 'stuNcCreate(\'' + p + '\')', 'bg-green-600 text-white hover:bg-green-700', 'fa-check') + X.btn('Fermer', 'stuNcToggle(\'' + p + '\')', 'bg-gray-200 text-gray-700', 'fa-xmark') + '</div></div>';
+  }
+  window.stuNcToggle = function (p) {
+    var b = $(p + 'Nc'); if (!b) return; b.classList.toggle('hidden');
+    if (!b.classList.contains('hidden')) { var n = $(p + 'NcName'), src = $(p === 'stu' ? 'stuName' : 'shtName'), ph = $(p === 'stu' ? 'stuPhone' : 'shtPhone'); if (n && src && !n.value) n.value = src.value; var np = $(p + 'NcPhone'); if (np && ph && !np.value) np.value = ph.value; if (n) n.focus(); }
+  };
+  window.stuNcCreate = function (p) {
+    if (ro()) return X.toast('Mode lecture seule : modification impossible', 'warning');
+    var name = val(p + 'NcName'), phone = val(p + 'NcPhone'), ig = val(p + 'NcIg').replace(/^@+/, ''), note = val(p + 'NcNote');
+    if (!name) return X.toast('Nom du client requis', 'error');
+    var nameId = p === 'stu' ? 'stuName' : 'shtName', phoneId = p === 'stu' ? 'stuPhone' : 'shtPhone';
+    var ex = clientByName(name), c = ex;
+    if (ex) { X.toast('Ce client existe déjà : il est sélectionné', 'warning'); }
+    else {
+      if (!appState.settings) appState.settings = {};
+      appState.settings.clientSeq = (appState.settings.clientSeq || 0) + 1;
+      var rid = 'C-' + String(appState.settings.clientSeq).padStart(3, '0');
+      c = { id: typeof generateId === 'function' ? generateId('client') : X.uid('client'), readableId: rid, uid: (window.auth && auth.currentUser) ? auth.currentUser.uid : null, name: name, phone: phone, contact: phone || ig || '', notes: note,
+        totalSpent: 0, unpaid: 0, transactionsCount: 0, updatedAt: Date.now(), social: { instagram: ig ? [ig] : [], facebook: [] } };
+      if (ig) c.username = ig;
+      if (!appState.clients) appState.clients = [];
+      appState.clients.push(c);
+      X.log('Nouveau client (depuis le studio)', name + ' · ' + rid);
+      X.save();
+      try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch (e) {}
+      X.toast('Client ' + rid + ' ajouté', 'success');
+    }
+    var f = $(nameId), ph = $(phoneId); if (f) f.value = c.name; if (ph && !ph.value) ph.value = c.phone || phone || '';
+    var dl = $(p + 'Clients'); if (dl && !ex) { var o = document.createElement('option'); o.value = c.name; dl.appendChild(o); }
+    ['Name', 'Phone', 'Ig', 'Note'].forEach(function (k) { var e = $(p + 'Nc' + k); if (e) e.value = ''; });
+    var b = $(p + 'Nc'); if (b) b.classList.add('hidden');
+  };
+
   // ---------------------------------------------------------------- conflits (cœur de la règle)
   // Retourne le rendez-vous en conflit (ou null). Les rendez-vous annulés ne bloquent jamais.
   function findConflict(date, start, durMin, ignoreId) {
@@ -184,7 +227,7 @@
     inMonth.forEach(function (b) { if (b.date !== last) { last = b.date; listHtml += '<div class="text-xs font-black uppercase text-gray-500 mt-3 mb-2">' + E(dayName(b.date)) + (b.date === today ? ' · aujourd\'hui' : '') + '</div>'; } listHtml += bookingRow(b); });
     var v = edit || { clientName: '', phone: '', date: ST.day || today, start: '', durationMin: cf.defaultMin, kind: '', price: '', note: '' };
     var form = ro() ? '<p class="text-xs text-gray-500">Mode lecture seule.</p>' :
-      '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
+      ncPanel('stu') + '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
       '<label class="text-xs font-bold text-gray-600">Client<input id="stuName" list="stuClients" value="' + E(v.clientName) + '" onchange="stuClientPick(\'stuName\',\'stuPhone\')" class="' + X.input + ' w-full mt-1" placeholder="Nom du client"></label>' +
       '<label class="text-xs font-bold text-gray-600">Téléphone<input id="stuPhone" value="' + E(v.phone) + '" class="' + X.input + ' w-full mt-1" placeholder="05 / 06 / 07 …"></label>' +
       '<label class="text-xs font-bold text-gray-600">Type de séance<input id="stuKind" value="' + E(v.kind) + '" class="' + X.input + ' w-full mt-1" placeholder="ex. Shooting mode, portrait…"></label>' +
@@ -286,7 +329,7 @@
       .sort(function (a, b) { return a.status === 'done' && b.status !== 'done' ? 1 : b.status === 'done' && a.status !== 'done' ? -1 : String(a.deliveryDate) < String(b.deliveryDate) ? -1 : 1; });
     var v = edit || { product: '', clientName: '', phone: '', shootDate: '', deliveryDate: '', price: '', note: '' };
     var form = ro() ? '<p class="text-xs text-gray-500">Mode lecture seule.</p>' :
-      '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
+      ncPanel('sht') + '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
       '<label class="text-xs font-bold text-gray-600">Produit<input id="shtProduct" value="' + E(v.product) + '" class="' + X.input + ' w-full mt-1" placeholder="ex. Parfum, sac, robe…"></label>' +
       '<label class="text-xs font-bold text-gray-600">Client<input id="shtName" list="shtClients" value="' + E(v.clientName) + '" onchange="stuClientPick(\'shtName\',\'shtPhone\')" class="' + X.input + ' w-full mt-1" placeholder="Nom du client"></label>' +
       '<label class="text-xs font-bold text-gray-600">Contact (téléphone)<input id="shtPhone" value="' + E(v.phone) + '" class="' + X.input + ' w-full mt-1" placeholder="05 / 06 / 07 …"></label>' +
