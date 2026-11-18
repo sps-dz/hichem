@@ -6,6 +6,17 @@
 //  supplémentaires sur les objets (receiptNo, proofRef, csat…).
 // =====================================================================
 (function () {
+  // Reste à payer JUSTE APRÈS ce paiement = dette actuelle + paiements reçus ensuite (pour un reçu réimprimé plus tard)
+  function restAfter(p, c) {
+    var later = 0, ts = Number(p && p.createdAt || 0);
+    if (!(ts > 0)) return Math.round(Number(c.unpaid || 0) * 100) / 100;
+    (appState.payments || []).forEach(function (q) { if (q && q.clientId === c.id && q.id !== p.id && Number(q.createdAt || 0) > ts) later += Number(q.amount || 0); });   // payés après : on les rajoute
+    (appState.transactions || []).forEach(function (t) {                 // ventes ajoutées après : on les retire
+      if (!t || t.clientId !== c.id || t.status === 'problem' || /^tx-emp-/.test(String(t.id || '')) || (t.paid && t.paidAccount !== 'avance')) return;
+      if (Number(t.completedAt || t.createdAt || 0) > ts) later -= Number(t.priceDzd || 0);
+    });
+    return Math.round((Number(c.unpaid || 0) + later) * 100) / 100;
+  }
   'use strict';
   if (!window.Ext) return;
   var X = Ext, E = X.esc, S = ExtStore;
@@ -245,7 +256,7 @@
     var inner = '<div style="padding:34px 40px;font-family:Segoe UI,Arial,sans-serif;color:#1f2d44">' + X.docHeader('REÇU DE PAIEMENT', 'N° ' + no + ' · ' + X.fmtDate(p.date)) +
       '<div style="margin:22px 0;padding:22px;background:' + C.SOFT + ';border-radius:14px;text-align:center"><div style="font-size:12px;color:#6b7a90;letter-spacing:2px">MONTANT REÇU</div><div style="font-size:34px;font-weight:900;color:' + C.NAVY + ';margin-top:4px">' + X.fmt(p.amount) + '</div></div>' +
       '<table style="width:100%;border-collapse:collapse;border:1px solid ' + C.LINE + ';border-radius:10px">' + row('Reçu de', E(c.name || p.clientName)) + row('Date du paiement', X.fmtDate(p.date)) + row('Mode de paiement', E(p.method || '—')) +
-      (p.proofRef ? row('Référence de l\'opération', E(p.proofRef)) : '') + (p.note ? row('Note', E(p.note)) : '') + row('Reste à payer après ce paiement', '<span style="color:' + (Number(c.unpaid) > 0 ? '#c0392b' : '#1e8e3e') + '">' + X.fmt(c.unpaid || 0) + '</span>') + '</table>' +
+      (p.proofRef ? row('Référence de l\'opération', E(p.proofRef)) : '') + (p.note ? row('Note', E(p.note)) : '') + row('Reste à payer après ce paiement', '<span style="color:' + (restAfter(p, c) > 0 ? '#c0392b' : '#1e8e3e') + '">' + X.fmt(restAfter(p, c)) + '</span>') + '</table>' +
       '<p style="margin-top:26px;font-size:12px;color:#6b7a90;text-align:center">Merci pour votre confiance. Ce reçu atteste du paiement indiqué ci-dessus.</p>' + X.docFooter() + '</div>';
     X.openDoc({ title: 'Reçu ' + no, filename: no + '.pdf', inner: inner, fixed: true });
   };

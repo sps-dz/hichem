@@ -176,11 +176,11 @@
   // Lien optionnel paie ↔ caisses (activé dans Comptabilité > Profil & réglages) : un salaire payé = un frais
   function syncLinkedExpense(pid) {
     try {
-      if (!(window.ExtStore && ExtStore.get('payrollLink', false))) return;
+      // Toujours actif : un salaire payé est TOUJOURS un frais (caisse ET bénéfice), une seule fois ; un salaire annulé retire son frais.
       var p = payments().find(function (x) { return x.id === pid; }), eid = 'exp_pay_' + pid;
       var list = appState.expenses || (appState.expenses = []), ex = list.find(function (x) { return x.id === eid; });
-      if (p && p.paid && p.method !== 'usdt' && Number(p.amount) > 0) {
-        var acc = (p.method === 'baridimob' || p.method === 'virement') ? 'baridimob' : 'liquide';
+      if (p && p.paid && Number(p.amount) > 0) {
+        var acc = p.method === 'usdt' ? 'usdt' : ((p.method === 'baridimob' || p.method === 'virement' || p.method === 'ccp') ? 'baridimob' : 'liquide');
         var data = { date: p.date, category: TYPES[payType(p)].salary ? 'Salaires' : 'Frais salariés', account: acc, amount: Number(p.amount), note: 'Paie — ' + empName(p.employeeId) + ' — ' + monthLabel(payPeriod(p)), updatedAt: Date.now() };
         if (ex) Object.assign(ex, data); else list.push(Object.assign({ id: eid, payrollPaymentId: pid, createdAt: Date.now() }, data));
       } else if (ex) {

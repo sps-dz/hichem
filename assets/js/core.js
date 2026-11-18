@@ -122,6 +122,8 @@ window.applyRecurringExpensesForCurrentMonth = function () {
   const today = typeof getLocalDateString === 'function' ? getLocalDateString() : now.toISOString().slice(0, 10);
   appState.recurringExpenses.forEach(re => {
     if (!re || !re.amount || !re.label) return;
+    // Déjà prélevée ce mois-ci (même charge) ? on ne la crée pas une deuxième fois.
+    if ((appState.expenses || []).some(e => e && e.recurringId === re.id && String(e.date || '').slice(0, 7) === monthKey)) return;
     const expense = {
       id: generateId('exp'),
       label: re.label,
@@ -130,7 +132,8 @@ window.applyRecurringExpensesForCurrentMonth = function () {
       category: re.category || 'Récurrent',
       account: re.account || 'liquide',
       note: 'Auto (mensuel)',
-      recurringGenerated: true, // Marque cette dépense comme issue d'une charge fixe :
+      recurringGenerated: true,
+      recurringId: re.id, // Marque cette dépense comme issue d'une charge fixe :
                                  // sert uniquement à la vue comptable (accrual) pour ne pas
                                  // compter cette charge deux fois (elle y est étalée par jour).
                                  // N'affecte ni les soldes, ni le profit "cash" existant.

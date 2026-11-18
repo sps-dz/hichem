@@ -16,7 +16,7 @@
   // =====================================================================
   function isReadOnly() { var s = window.appState && appState.session; return !!(s && s.type === 'employee' && s.permissions && s.permissions.readonly === true); }
   window.isReadOnlySession = isReadOnly;
-  var MUTATORS = ['addClient', 'deleteClient', 'updateClientDebtNote', 'addOffer', 'deleteOffer', 'handleNewTodoSubmit', 'changeTodoStatus', 'toggleTodoPayment', 'confirmPaidAccount', 'deleteTodoTransaction',
+  var MUTATORS = ['fcStart', 'fcUndo', 'addClient', 'deleteClient', 'updateClientDebtNote', 'addOffer', 'deleteOffer', 'handleNewTodoSubmit', 'changeTodoStatus', 'toggleTodoPayment', 'confirmPaidAccount', 'deleteTodoTransaction',
     'addPayment', 'deletePayment', 'addExpense', 'deleteExpense', 'addRecurringExpense', 'deleteRecurringExpense', 'applyRecurringExpensesNow', 'addUsdPurchase', 'deleteUsdPurchase', 'deleteRequest',
     'addAdAccount', 'deleteAdAccount', 'rechargeAdAccount', 'addAdminEmail', 'removeAdminEmail', 'addEmployee', 'updateEmployeeSalary', 'updateEmployeePermission', 'markAbsent', 'removeAbsence', 'deleteAbsence',
     'toggleEmployeeActive', 'deleteEmployee', 'importLocalBackup', 'deleteTransaction', 'saveEditTransaction', 'saveBalancesAdjustments', 'addEmployeePerformance', 'confirmOcrSponsors', 'saveClientFromOcr',

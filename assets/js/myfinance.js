@@ -14,15 +14,12 @@
 
   // ventes validées du mois (même règle que la caisse : on ignore les « problèmes » et les anciennes ventes sans montant)
   function monthStats(ym) {
-    var sales = 0, cost = 0, n = 0, usd = 0, cashIn = 0, exp = 0;
-    (appState.transactions || []).forEach(function (t) {
-      if (!t || isTask(t) || !inMonth(t.date, ym)) return;
-      if (t.status !== 'active' && t.status) return;
-      sales += num(t.priceDzd); usd += num(t.amount); cost += X.txCost(t); n++;
-    });
-    (appState.payments || []).forEach(function (p) { if (p && inMonth(p.date, ym)) cashIn += num(p.amount); });
-    (appState.expenses || []).forEach(function (e) { if (e && inMonth(e.date, ym)) exp += num(e.amount); });
-    return { sales: sales, cost: cost, exp: exp, profit: sales - cost - exp, n: n, usd: usd, cashIn: cashIn };
+    // MÊME calcul que le tableau de bord et la comptabilité (getProfitSummaryYmd) : frais, salaires, dépenses USDT et studio compris
+    var r = X.monthRange(ym), P = (typeof getProfitSummaryYmd === 'function') ? getProfitSummaryYmd(r.from, r.to) : null, usd = 0;
+    (appState.transactions || []).forEach(function (t) { if (t && !isTask(t) && t.status !== 'problem' && inMonth(t.date, ym)) usd += num(t.amount); });
+    var cashIn = window.FinanceCore ? FinanceCore.received(r.from, r.to) : 0;
+    if (!P) return { sales: 0, cost: 0, exp: 0, profit: 0, n: 0, usd: usd, cashIn: cashIn };
+    return { sales: P.revenue, cost: P.cost, exp: P.expenses + P.usdtExpensesDzd, profit: P.netProfit, n: P.txCount, usd: usd, cashIn: cashIn, studio: P.studioRevenue || 0 };
   }
   function debts() {
     var owe = 0, adv = 0, list = [];
@@ -38,7 +35,7 @@
     if (num(b.liquide) < 0) w.push('Votre caisse « Liquide » est négative (' + X.fmt(b.liquide) + '). Ce n\'est pas possible dans la réalité : il y a sûrement une erreur de saisie (souvent un achat de dollars avec un mauvais taux).');
     if (num(b.baridimob) < 0) w.push('Votre compte BaridiMob / CCP est négatif (' + X.fmt(b.baridimob) + ') : vérifiez vos achats et vos frais.');
     if (num(b.usdt) < 0) w.push('Votre stock de dollars est négatif (' + X.usd(b.usdt) + ') : vous avez vendu plus de dollars que vous n\'en avez enregistré à l\'achat. Il manque peut-être des achats dans l\'onglet « Achats ».');
-    var oddRates = (appState.usdPurchases || []).filter(function (u) { var r = num(u.rate); return u && (r < 100 || r > 1000); }).length;
+    var oddRates = (appState.usdPurchases || []).filter(function (u) { var r = num(u.rate); return u && (r < 100 || r > 1000) && (!window.FinanceCore || FinanceCore.inLedger(u)); }).length;
     if (oddRates) w.push(oddRates + ' achat(s) de dollars ont un taux impossible (par exemple 355 000 au lieu de 355). Corrigez-les dans « Contrôle financier › Taux USD ».');
     try { if (window.Integrity) { var a = Integrity.anomalies().length; if (a) w.push(a + ' ligne(s) incomplète(s) ou en double à vérifier dans « Contrôle financier › Lignes anormales ».'); } } catch (e) {}
     return w;
@@ -87,7 +84,7 @@
       big('Ce que m\'ont coûté les dollars', X.fmt(cur.cost), 'Le prix auquel vous avez acheté les ' + X.usd(cur.usd) + ' revendus. ' + delta(cur.cost, prev.cost, false), '') +
       big('Mes frais', X.fmt(cur.exp), 'Dépenses du mois (pub, salaires, loyer…). ' + delta(cur.exp, prev.exp, false), '') +
       big('Bénéfice estimé', X.fmt(cur.profit), 'Ventes − coût des dollars − frais. ' + delta(cur.profit, prev.profit, true), sign(cur.profit)) + '</div>' +
-      '<p class="text-xs text-gray-500 leading-relaxed">Pour comparer : vous avez réellement <b>encaissé ' + X.fmt(cur.cashIn) + '</b> en paiements ce mois-ci. La différence avec les ventes vient des clients qui n\'ont pas encore payé (voir section 2). Le bénéfice est une <b>estimation</b> : il utilise vos taux d\'achat enregistrés.</p>');
+      '<p class="text-xs text-gray-500 leading-relaxed">Pour comparer : vous avez réellement <b>encaissé ' + X.fmt(cur.cashIn) + '</b> ce mois-ci (paiements, ventes payées tout de suite, versements studio). La différence avec les ventes vient des clients qui n\'ont pas encore payé (voir section 2). Le bénéfice est une <b>estimation</b> : il utilise vos taux d\'achat enregistrés.</p>');
 
     // 4) petit lexique
     html += X.card('Les mots simples', 'fa-book-open', '<dl class="text-sm space-y-2 text-gray-600 dark:text-gray-300">' +

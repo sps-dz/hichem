@@ -43,6 +43,9 @@
   }
   function clientByName(n) { var k = String(n || '').trim().toLowerCase(); if (!k) return null; return (appState.clients || []).find(function (c) { return String(c.name || '').trim().toLowerCase() === k; }) || null; }
   function clientsDatalist(id) { return '<datalist id="' + id + '">' + (appState.clients || []).slice(0, 2000).map(function (c) { return '<option value="' + E(c.name || '') + '">'; }).join('') + '</datalist>'; }
+  // caisse où entre l'argent d'un versement (compté dans les soldes via finance-core.js)
+  function accSelect(id) { return '<select id="' + id + '" class="' + X.input + ' !p-1 text-xs w-auto" title="Caisse"><option value="liquide">Liquide</option><option value="baridimob">BaridiMob / CCP</option><option value="usdt">USDT</option></select>'; }
+  function accOf(id) { var v = val(id); return v === 'baridimob' || v === 'usdt' ? v : 'liquide'; }
   function contactBtns(r) {
     var w = waLink(r.phone), out = '';
     if (r.phone) out += '<a href="tel:' + E(String(r.phone).replace(/[^\d+]/g, '')) + '" class="px-2 py-1 rounded-lg bg-gray-100 text-gray-700 text-[11px] font-bold hover:bg-gray-200"><i class="fas fa-phone mr-1"></i>' + E(r.phone) + '</a> ';
@@ -137,6 +140,7 @@
     }
     var price = num(val('stuPrice')), first = num(val('stuPaid'));
     if (first < 0 || price < 0) return X.toast('Montant invalide', 'warning');
+    if (price > 0 && first > price) return X.toast('Le versement dépasse le prix de la réservation', 'error');
     var cl = clientByName(name), rec = ST.editB ? X.find(bookings(), ST.editB) : null;
     if (rec) {
       rec.clientName = name; rec.clientId = cl ? cl.id : (rec.clientId || ''); rec.phone = val('stuPhone'); rec.date = date; rec.start = start; rec.durationMin = dur;
@@ -144,7 +148,7 @@
       X.log('Rendez-vous studio modifié', name + ' · ' + date + ' ' + start);
     } else {
       rec = { id: X.uid('stu'), clientName: name, clientId: cl ? cl.id : '', phone: val('stuPhone'), date: date, start: start, durationMin: dur, kind: val('stuKind'), price: price, payments: [], status: 'confirme', note: val('stuNote'), createdAt: Date.now(), by: X.actor() };
-      if (first > 0) rec.payments.push({ date: X.today(), amount: first, by: X.actor() });
+      if (first > 0) rec.payments.push({ date: X.today(), amount: first, account: accOf('stuPaidAcc'), ts: Date.now(), by: X.actor() });
       bookings().push(rec);
       X.log('Rendez-vous studio créé', name + ' · ' + date + ' ' + start + ' · ' + X.fmt(price));
     }
@@ -164,15 +168,18 @@
   };
   window.stuDelete = function (id) {
     if (!X.isAdmin() || ro()) return X.toast('Réservé à l\'administrateur', 'error');
-    var r = X.find(bookings(), id); if (!r || !confirm('Supprimer définitivement ce rendez-vous ?')) return;
+    var r = X.find(bookings(), id); if (!r) return;
+    if ((r.payments || []).length) return X.toast('Ce rendez-vous a des versements enregistrés en caisse : annulez-le plutôt (l\'argent reste compté).', 'warning');
+    if (!confirm('Supprimer définitivement ce rendez-vous ?')) return;
     S.set('studioBookings', bookings().filter(function (b) { return b.id !== id; })); X.log('Rendez-vous studio supprimé', r.clientName + ' · ' + r.date); X.rerender();
   };
   window.stuPay = function (id) {
     if (ro()) return X.toast('Mode lecture seule : modification impossible', 'warning');
     var r = X.find(bookings(), id), a = num(val('stuPay_' + id)); if (!r) return;
     if (!(a > 0)) return X.toast('Saisissez le montant versé', 'warning');
-    r.payments = r.payments || []; r.payments.push({ date: X.today(), amount: a, by: X.actor() }); r.updatedAt = Date.now();
-    S.set('studioBookings', bookings()); X.log('Versement studio', r.clientName + ' · ' + X.fmt(a)); X.toast('Versement enregistré', 'success'); X.rerender();
+    if (num(r.price) > 0 && a > payInfo(r).rest + 0.5) return X.toast('Versement supérieur au reste à payer (' + X.fmt(payInfo(r).rest) + ')', 'error');
+    r.payments = r.payments || []; r.payments.push({ date: X.today(), amount: a, account: accOf('stuPayAcc_' + id), ts: Date.now(), by: X.actor() }); r.updatedAt = Date.now();
+    S.set('studioBookings', bookings()); if (typeof recalculateFinanceBalances === 'function') recalculateFinanceBalances(); X.log('Versement studio', r.clientName + ' · ' + X.fmt(a)); X.toast('Versement enregistré', 'success'); X.rerender();
   };
   window.stuPickDay = function (d) { ST.day = (ST.day === d) ? '' : d; if (ST.day) { var f = $('stuDate'); if (f && !ST.editB) f.value = d; } X.rerender(); };
   window.stuMonth = function (delta) { ST.month = X.shiftMonth(ST.month || X.month(), delta); ST.day = ''; X.rerender(); };
@@ -195,7 +202,7 @@
       acts += '<button type="button" data-id="' + E(b.id) + '" onclick="stuEdit(this.dataset.id)" class="px-2 py-1 rounded-lg bg-gray-100 text-gray-700 text-[11px] font-bold">Modifier</button> ';
       if (X.isAdmin()) acts += '<button type="button" data-id="' + E(b.id) + '" onclick="stuDelete(this.dataset.id)" class="px-2 py-1 rounded-lg bg-red-50 text-red-600 text-[11px] font-bold">✕</button>';
     }
-    var payBox = (!ro() && !cancelled && p.k !== 'full') ? '<div class="flex gap-1 mt-2"><input id="stuPay_' + E(b.id) + '" type="number" min="0" placeholder="Versement DA" class="' + X.input + ' w-32 !p-1 text-xs"><button type="button" data-id="' + E(b.id) + '" onclick="stuPay(this.dataset.id)" class="px-2 py-1 rounded-lg bg-green-600 text-white text-[11px] font-bold">+ Verser</button></div>' : '';
+    var payBox = (!ro() && !cancelled && p.k !== 'full') ? '<div class="flex gap-1 mt-2"><input id="stuPay_' + E(b.id) + '" type="number" min="0" placeholder="Versement DA" class="' + X.input + ' w-32 !p-1 text-xs">' + accSelect('stuPayAcc_' + E(b.id)) + '<button type="button" data-id="' + E(b.id) + '" onclick="stuPay(this.dataset.id)" class="px-2 py-1 rounded-lg bg-green-600 text-white text-[11px] font-bold">+ Verser</button></div>' : '';
     return '<div class="p-4 rounded-2xl border dark:border-gray-700 ' + (cancelled ? 'opacity-60 bg-gray-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-800') + ' mb-3">' +
       '<div class="flex flex-wrap items-start justify-between gap-2"><div><div class="font-black text-gray-800 dark:text-white">' + E(b.start) + ' – ' + E(toHM(endOf(b))) + ' · ' + E(b.clientName) + '</div>' +
       '<div class="text-xs text-gray-500">' + E(dayName(b.date)) + (b.kind ? ' · ' + E(b.kind) : '') + '</div></div><div>' + stBadge + '</div></div>' +
@@ -235,7 +242,7 @@
       '<label class="text-xs font-bold text-gray-600">Heure de début<input id="stuStart" type="time" value="' + E(v.start) + '" onchange="stuSlotHint()" class="' + X.input + ' w-full mt-1"></label>' +
       '<label class="text-xs font-bold text-gray-600">Durée (heures)<input id="stuDur" type="number" step="0.5" min="0.5" value="' + E(String(num(v.durationMin) / 60)) + '" onchange="stuSlotHint()" class="' + X.input + ' w-full mt-1"></label>' +
       '<label class="text-xs font-bold text-gray-600">Prix de la réservation (DA)<input id="stuPrice" type="number" min="0" value="' + E(v.price) + '" class="' + X.input + ' w-full mt-1"></label>' +
-      (edit ? '<div class="text-xs text-gray-500 self-end pb-2">Les versements se gèrent dans la liste ci-dessous.</div>' : '<label class="text-xs font-bold text-gray-600">Versé maintenant (DA)<input id="stuPaid" type="number" min="0" value="" class="' + X.input + ' w-full mt-1" placeholder="0 si rien"></label>') +
+      (edit ? '<div class="text-xs text-gray-500 self-end pb-2">Les versements se gèrent dans la liste ci-dessous.</div>' : '<label class="text-xs font-bold text-gray-600">Versé maintenant (DA)<span class="flex gap-1 mt-1"><input id="stuPaid" type="number" min="0" value="" class="' + X.input + ' w-full" placeholder="0 si rien">' + accSelect('stuPaidAcc') + '</span></label>') +
       '<label class="text-xs font-bold text-gray-600">Note<input id="stuNote" value="' + E(v.note) + '" class="' + X.input + ' w-full mt-1" placeholder="optionnel"></label></div>' +
       '<div id="stuHint" class="mt-3"></div><div class="mt-3 flex gap-2">' + X.btn(edit ? 'Enregistrer les modifications' : 'Réserver le créneau', 'stuSave()', 'bg-indigo-600 text-white hover:bg-indigo-700', 'fa-calendar-check') + (edit ? X.btn('Annuler la modification', 'stuCancelEdit()', 'bg-gray-200 text-gray-700', 'fa-xmark') : '') + '</div>' + clientsDatalist('stuClients');
     var settings = X.isAdmin() && !ro() ? '<details class="mt-2"><summary class="text-xs font-bold text-gray-500 cursor-pointer">Réglages du studio</summary><div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3 items-end">' +
@@ -266,11 +273,12 @@
     if (sd && X.isYmd(sd) && sd > del) return X.toast('La remise doit être après (ou le même jour que) le shooting', 'warning');
     var price = num(val('shtPrice')), first = num(val('shtPaid'));
     if (price < 0 || first < 0) return X.toast('Montant invalide', 'warning');
+    if (price > 0 && first > price) return X.toast('Le versement dépasse le prix', 'error');
     var cl = clientByName(name), rec = ST.editS ? X.find(shoots(), ST.editS) : null;
     if (rec) { rec.product = prod; rec.clientName = name; rec.clientId = cl ? cl.id : (rec.clientId || ''); rec.phone = val('shtPhone'); rec.shootDate = sd; rec.deliveryDate = del; rec.price = price; rec.note = val('shtNote'); rec.updatedAt = Date.now(); X.log('Fiche shooting modifiée', prod + ' · ' + name); }
     else {
       rec = { id: X.uid('sht'), product: prod, clientName: name, clientId: cl ? cl.id : '', phone: val('shtPhone'), shootDate: sd, deliveryDate: del, price: price, payments: [], status: 'todo', note: val('shtNote'), createdAt: Date.now(), by: X.actor() };
-      if (first > 0) rec.payments.push({ date: X.today(), amount: first, by: X.actor() });
+      if (first > 0) rec.payments.push({ date: X.today(), amount: first, account: accOf('shtPaidAcc'), ts: Date.now(), by: X.actor() });
       shoots().push(rec); X.log('Fiche shooting créée', prod + ' · ' + name + ' · remise ' + del);
     }
     ST.editS = ''; S.set('productShoots', shoots()); X.toast('Fiche enregistrée', 'success'); X.rerender();
@@ -285,15 +293,18 @@
   };
   window.shtDelete = function (id) {
     if (!X.isAdmin() || ro()) return X.toast('Réservé à l\'administrateur', 'error');
-    var r = X.find(shoots(), id); if (!r || !confirm('Supprimer définitivement cette fiche ?')) return;
+    var r = X.find(shoots(), id); if (!r) return;
+    if ((r.payments || []).length) return X.toast('Cette fiche a des versements enregistrés en caisse : elle ne peut pas être supprimée.', 'warning');
+    if (!confirm('Supprimer définitivement cette fiche ?')) return;
     S.set('productShoots', shoots().filter(function (b) { return b.id !== id; })); X.log('Fiche shooting supprimée', r.product + ' · ' + r.clientName); X.rerender();
   };
   window.shtPay = function (id) {
     if (ro()) return X.toast('Mode lecture seule : modification impossible', 'warning');
     var r = X.find(shoots(), id), a = num(val('shtPay_' + id)); if (!r) return;
     if (!(a > 0)) return X.toast('Saisissez le montant versé', 'warning');
-    r.payments = r.payments || []; r.payments.push({ date: X.today(), amount: a, by: X.actor() }); r.updatedAt = Date.now();
-    S.set('productShoots', shoots()); X.log('Versement shooting', r.product + ' · ' + X.fmt(a)); X.toast('Versement enregistré', 'success'); X.rerender();
+    if (num(r.price) > 0 && a > payInfo(r).rest + 0.5) return X.toast('Versement supérieur au reste à payer (' + X.fmt(payInfo(r).rest) + ')', 'error');
+    r.payments = r.payments || []; r.payments.push({ date: X.today(), amount: a, account: accOf('shtPayAcc_' + id), ts: Date.now(), by: X.actor() }); r.updatedAt = Date.now();
+    S.set('productShoots', shoots()); if (typeof recalculateFinanceBalances === 'function') recalculateFinanceBalances(); X.log('Versement shooting', r.product + ' · ' + X.fmt(a)); X.toast('Versement enregistré', 'success'); X.rerender();
   };
   window.shtFilter = function (f) { ST.shFilter = f; X.rerender(); };
 
@@ -312,7 +323,7 @@
         ' <button type="button" data-id="' + E(r.id) + '" onclick="shtEdit(this.dataset.id)" class="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-[11px] font-bold">Modifier</button>' +
         (X.isAdmin() ? ' <button type="button" data-id="' + E(r.id) + '" onclick="shtDelete(this.dataset.id)" class="px-2 py-1 rounded-lg bg-red-50 text-red-600 text-[11px] font-bold">✕</button>' : '');
     }
-    var payBox = (!ro() && p.k !== 'full') ? '<div class="flex gap-1 mt-2"><input id="shtPay_' + E(r.id) + '" type="number" min="0" placeholder="Versement DA" class="' + X.input + ' w-32 !p-1 text-xs"><button type="button" data-id="' + E(r.id) + '" onclick="shtPay(this.dataset.id)" class="px-2 py-1 rounded-lg bg-green-600 text-white text-[11px] font-bold">+ Verser</button></div>' : '';
+    var payBox = (!ro() && p.k !== 'full') ? '<div class="flex gap-1 mt-2"><input id="shtPay_' + E(r.id) + '" type="number" min="0" placeholder="Versement DA" class="' + X.input + ' w-32 !p-1 text-xs">' + accSelect('shtPayAcc_' + E(r.id)) + '<button type="button" data-id="' + E(r.id) + '" onclick="shtPay(this.dataset.id)" class="px-2 py-1 rounded-lg bg-green-600 text-white text-[11px] font-bold">+ Verser</button></div>' : '';
     return '<div class="p-4 rounded-2xl border dark:border-gray-700 bg-white dark:bg-gray-800">' +
       '<div class="flex items-start justify-between gap-2"><div><div class="font-black text-gray-800 dark:text-white"><i class="fas fa-box mr-1 text-indigo-500"></i>' + E(r.product) + '</div><div class="text-sm text-gray-600 dark:text-gray-300">' + E(r.clientName) + '</div></div><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-700">' + E(SH_ST[r.status] || 'À faire') + '</span></div>' +
       '<div class="flex flex-wrap items-center gap-2 mt-2">' + contactBtns(r) + '</div>' +
@@ -336,7 +347,7 @@
       '<label class="text-xs font-bold text-gray-600">Date du shooting<input id="shtShootDate" type="date" value="' + E(v.shootDate) + '" class="' + X.input + ' w-full mt-1"></label>' +
       '<label class="text-xs font-bold text-gray-600">Remise du fichier final<input id="shtDelivery" type="date" value="' + E(v.deliveryDate) + '" class="' + X.input + ' w-full mt-1"></label>' +
       '<label class="text-xs font-bold text-gray-600">Prix (DA)<input id="shtPrice" type="number" min="0" value="' + E(v.price) + '" class="' + X.input + ' w-full mt-1"></label>' +
-      (edit ? '<div class="text-xs text-gray-500 self-end pb-2">Les versements se gèrent sur la fiche.</div>' : '<label class="text-xs font-bold text-gray-600">Versé maintenant (DA)<input id="shtPaid" type="number" min="0" class="' + X.input + ' w-full mt-1" placeholder="0 si rien"></label>') +
+      (edit ? '<div class="text-xs text-gray-500 self-end pb-2">Les versements se gèrent sur la fiche.</div>' : '<label class="text-xs font-bold text-gray-600">Versé maintenant (DA)<span class="flex gap-1 mt-1"><input id="shtPaid" type="number" min="0" class="' + X.input + ' w-full" placeholder="0 si rien">' + accSelect('shtPaidAcc') + '</span></label>') +
       '<label class="text-xs font-bold text-gray-600 md:col-span-2">Note<input id="shtNote" value="' + E(v.note) + '" class="' + X.input + ' w-full mt-1" placeholder="optionnel (consignes, nombre de photos…)"></label></div>' +
       '<div class="mt-3 flex gap-2">' + X.btn(edit ? 'Enregistrer les modifications' : 'Créer la fiche produit', 'shtSave()', 'bg-indigo-600 text-white hover:bg-indigo-700', 'fa-box') + (edit ? X.btn('Annuler la modification', 'shtCancelEdit()', 'bg-gray-200 text-gray-700', 'fa-xmark') : '') + '</div>' + clientsDatalist('shtClients');
     var tabs = [['open', 'En cours'], ['unpaid', 'Solde à encaisser'], ['done', 'Livrés'], ['all', 'Tous']].map(function (t) { return '<button type="button" onclick="shtFilter(\'' + t[0] + '\')" class="px-3 py-1.5 rounded-full text-xs font-bold ' + (f === t[0] ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700') + '">' + t[1] + '</button>'; }).join(' ');

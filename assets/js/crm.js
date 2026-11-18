@@ -186,6 +186,7 @@
         ['quotes', 'creditNotes'].forEach(function (k) { S.list(k).forEach(function (r) { if (r.clientId === o.id) { r.clientId = keep.id; r.clientName = keep.name; } }); });
         keep.totalSpent = Number(keep.totalSpent || 0) + Number(o.totalSpent || 0);
         keep.unpaid = Number(keep.unpaid || 0) + Number(o.unpaid || 0);
+        if (window.FinanceCore && FinanceCore.active()) FinanceCore.transferOpening(o.id, keep.id);   // nouveau départ : le solde de départ suit la fiche conservée
         if (o.debtStartDate && (!keep.debtStartDate || o.debtStartDate < keep.debtStartDate)) keep.debtStartDate = o.debtStartDate;
         ['phone', 'instagram', 'contact', 'email', 'username'].forEach(function (f) { if (!keep[f] && o[f]) keep[f] = o[f]; });
         if (o.notes && keep.notes !== o.notes) keep.notes = (keep.notes ? keep.notes + ' | ' : '') + o.notes;

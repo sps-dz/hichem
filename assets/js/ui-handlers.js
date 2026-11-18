@@ -973,8 +973,9 @@ window.exportFinancialReportPdf = function() {
     return;
   }
 
-  const b = calculateTheoreticalBalance();
-  const redotpayRate = (typeof getRedotpayRate === 'function') ? getRedotpayRate() : 250;
+  if (typeof recalculateFinanceBalances === 'function') recalculateFinanceBalances();
+  const b = Object.assign({ liquide: 0, baridimob: 0, usdt: 0 }, appState.balances || calculateTheoreticalBalance());   // ajustements manuels compris (= tableau de bord)
+  const redotpayRate = (typeof getBuyRate === 'function') ? (Number(getBuyRate()) || 255) : 255;   // stock valorisé au taux d'achat
   const netWorthDzd = (b.liquide || 0) + (b.baridimob || 0) + (b.usdt || 0) * redotpayRate;
 
   const today = new Date(); today.setHours(0,0,0,0);

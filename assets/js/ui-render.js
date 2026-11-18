@@ -197,6 +197,9 @@ window.renderDashboard = function(container) {
   const last30FromDate = new Date(last30ToDate); last30FromDate.setDate(last30FromDate.getDate() - 29);
   const toYmdLocal = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const pLast30 = sum(toYmdLocal(last30FromDate), toYmdLocal(last30ToDate));
+  // Rythme de caisse réel des 30 derniers jours (argent entré − frais et salaires payés) : même source que les soldes
+  const cf30 = (window.FinanceCore && typeof FinanceCore.cashFlow === 'function') ? FinanceCore.cashFlow(toYmdLocal(last30FromDate), toYmdLocal(last30ToDate)) : null;
+  if (pLast30 && cf30) pLast30.netProfit = cf30.net;
 
   const employees = appState.employees || [];
   const txs = appState.transactions || [];
@@ -216,7 +219,7 @@ window.renderDashboard = function(container) {
   if (usdtStock < 150) {
       alerts.push({
           type: 'warning', icon: 'fa-exclamation-triangle',
-          text: `Stock USDT critique : Il ne reste que ${formatCurrency(usdtStock, 'USD', 2)}. Prévoyez un rechargement.`
+          text: `Stock USDT critique : Il ne reste que ${(Number(usdtStock) || 0).toFixed(2)} USDT. Prévoyez un rechargement.`
       });
   }
 
@@ -248,10 +251,13 @@ window.renderDashboard = function(container) {
   }
 
   // --- Patrimoine net (trésorerie totale convertie en DZD) ---
-  const redotpayRate = (typeof getRedotpayRate === 'function') ? getRedotpayRate() : 250;
+  // Stock USDT valorisé au taux d'ACHAT (son coût), comme dans le calcul des bénéfices
+  const redotpayRate = (typeof getBuyRate === 'function') ? (Number(getBuyRate()) || 255) : 255;
   const usdtInDzd = (b.usdt || 0) * redotpayRate;
   const netWorthDzd = (b.liquide || 0) + (b.baridimob || 0) + usdtInDzd;
-  const netWorthWithReceivables = netWorthDzd + totalDettesAmount;
+  // Total = trésorerie + ce que les clients doivent − ce qu'on doit aux clients (leurs avances)
+  const totalAvancesAmount = allClients.reduce((s, c) => s + Math.max(0, -Number(c.unpaid || 0)), 0);
+  const netWorthWithReceivables = netWorthDzd + totalDettesAmount - totalAvancesAmount;
   const shareOf = (v) => netWorthDzd !== 0 ? Math.max(0, Math.min(100, (v / netWorthDzd) * 100)) : 0;
   const shareLiquide = shareOf(b.liquide || 0);
   const shareBaridimob = shareOf(b.baridimob || 0);
@@ -360,7 +366,7 @@ window.renderDashboard = function(container) {
               </div>
             ` : ''}
             <div class="dash-hero-sub">
-              + ${formatCurrency(totalDettesAmount)} de créances clients
+              + ${formatCurrency(totalDettesAmount)} de créances clients${totalAvancesAmount > 0 ? ` − ${formatCurrency(totalAvancesAmount)} d'avances clients` : ''}
               <strong>→ ${formatCurrency(netWorthWithReceivables)} au total</strong>
             </div>
           </div>
@@ -384,7 +390,7 @@ window.renderDashboard = function(container) {
           <div class="dash-hero-legend">
             <span><i class="dash-dot" style="background:#86efac"></i>Liquide ${safeToFixed(shareLiquide,0)}%</span>
             <span><i class="dash-dot" style="background:#93c5fd"></i>BaridiMob ${safeToFixed(shareBaridimob,0)}%</span>
-            <span><i class="dash-dot" style="background:#d8b4fe"></i>USDT ${safeToFixed(shareUsdt,0)}% <em>(taux ${formatCurrency(redotpayRate)})</em></span>
+            <span><i class="dash-dot" style="background:#d8b4fe"></i>USDT ${safeToFixed(shareUsdt,0)}% <em>(taux d'achat ${formatCurrency(redotpayRate)})</em></span>
           </div>
         </div>
         <button onclick="exportFinancialReportPdf()" class="dash-hero-export">
@@ -395,7 +401,7 @@ window.renderDashboard = function(container) {
       ${pLast30 ? `
       <div class="dash-forecast">
         <div class="dash-forecast-title"><i class="fas fa-chart-line"></i> Prévision 30 jours</div>
-        <div class="dash-forecast-sub">Rythme des 30 derniers jours</div>
+        <div class="dash-forecast-sub">Rythme de caisse des 30 derniers jours (encaissé − frais payés)</div>
         <div class="dash-forecast-row">
           <span>Aujourd'hui</span>
           <strong>${formatCurrency(netWorthDzd)}</strong>
@@ -1356,9 +1362,11 @@ window.renderExpensesTab = function(container) {
           <div class="text-xs font-black uppercase tracking-wide text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <i class="fas fa-wallet"></i> Trésorerie (caisse)
           </div>
-          <div class="text-xs text-gray-400 dark:text-gray-500 mb-2">Argent réellement entré/sorti sur la période</div>
-          <div class="text-2xl font-black ${pnlCash.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(pnlCash.netProfit)}</div>
-          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">CA ${formatCurrency(pnlCash.revenue)} • Frais payés ${formatCurrency(pnlCash.expenses + pnlCash.usdtExpensesDzd)}</div>
+          <div class="text-xs text-gray-400 dark:text-gray-500 mb-2">Argent réellement entré − frais et salaires payés sur la période</div>
+          ${(() => { const cf = (window.FinanceCore && FinanceCore.cashFlow) ? FinanceCore.cashFlow(financeRange.from, financeRange.to) : null; return cf ? `
+          <div class="text-2xl font-black ${cf.net >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(cf.net)}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Encaissé ${formatCurrency(cf.inn)} • Frais payés ${formatCurrency(cf.out)}${cf.usd > 0 ? ` • Achats de dollars ${formatCurrency(cf.usd)} (devenus du stock USDT)` : ''}</div>` : `
+          <div class="text-2xl font-black ${pnlCash.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(pnlCash.netProfit)}</div>`; })()}
         </div>
         <div class="p-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20">
           <div class="text-xs font-black uppercase tracking-wide text-indigo-600 dark:text-indigo-300 flex items-center gap-2">
@@ -2141,30 +2149,18 @@ window.renderMonthlyStatsChart = function() {
   const ctx = document.getElementById('monthlyStatsChart');
   if (!ctx) return;
 
-  // Calculer les données par mois
-  const transactions = appState.transactions || [];
+  // Données par mois (6 derniers mois, AVEC l'année) : même calcul que le reste du site (getProfitSummaryYmd)
   const monthlyData = {};
-  
-  // Initialiser les 6 derniers mois
+  const now0 = new Date();
   for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    const monthKey = d.toLocaleString('fr-FR', { month: 'short' });
-    monthlyData[monthKey] = { income: 0, profit: 0 };
+    const d = new Date(now0.getFullYear(), now0.getMonth() - i, 1);
+    const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const to = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
+    const p = (typeof getProfitSummaryYmd === 'function') ? getProfitSummaryYmd(from, to) : null;
+    const label = d.toLocaleString('fr-FR', { month: 'short' }) + ' ' + String(d.getFullYear()).slice(2);
+    monthlyData[label] = { income: p ? p.revenue : 0, profit: p ? p.grossProfit : 0 };
   }
-
-  transactions.forEach(t => {
-    const d = new Date(t.date);
-    const monthKey = d.toLocaleString('fr-FR', { month: 'short' });
-    if (monthlyData[monthKey]) {
-      monthlyData[monthKey].income += (t.priceDzd || 0);
-      const buyRate = (typeof getTransactionBuyRate === 'function') ? getTransactionBuyRate(t) : (typeof getBuyRate === 'function' ? getBuyRate() : 255);
-      const p = typeof calculateTransactionProfit === 'function'
-        ? calculateTransactionProfit(Number(t.amount || 0), Number(t.priceDzd || 0), buyRate)
-        : (Number(t.priceDzd || 0) - (Number(t.amount || 0) * buyRate));
-      monthlyData[monthKey].profit += p;
-    }
-  });
 
   const labels = Object.keys(monthlyData);
   const incomeData = labels.map(l => monthlyData[l].income);

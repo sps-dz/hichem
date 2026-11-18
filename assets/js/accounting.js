@@ -17,6 +17,7 @@
   //  LIVRE DE CAISSE (même logique que calculateTheoreticalBalance, mais ligne par ligne)
   // =====================================================================
   function buildLedger() {
+    if (window.FinanceCore) return FinanceCore.ledger();            // même source que les soldes du site (finance-core.js)
     var L = { liquide: [], baridimob: [], usdt: [] };
     var rate = (typeof getRedotpayRate === 'function') ? getRedotpayRate() : 250;
     function push(acc, date, ts, label, ref, inn, out) { L[acc].push({ date: date || '', ts: ts || 0, label: label, ref: ref || '', inn: inn || 0, out: out || 0 }); }
@@ -164,7 +165,7 @@
     var cur = X.month(), months = [];
     for (var i = 1; i <= 12; i++) months.push(X.shiftMonth(cur, -i));
     var rows = months.map(function (m) {
-      var c = closures()[m], locked = c && c.locked, p = (typeof getProfitSummaryYmd === 'function') ? getProfitSummaryYmd(X.monthRange(m).from, X.monthRange(m).to) : null;
+      var c = closures()[m], locked = c && c.locked, p = (locked && c.revenue !== undefined) ? { revenue: Number(c.revenue || 0), netProfit: Number(c.net || 0) } : ((typeof getProfitSummaryYmd === 'function') ? getProfitSummaryYmd(X.monthRange(m).from, X.monthRange(m).to) : null);
       return '<tr><td class="p-3 font-bold text-gray-800 dark:text-white">' + E(X.monthLabel(m)) + '</td><td class="p-3 text-right font-mono">' + (p ? X.fmt(p.revenue) : '—') + '</td><td class="p-3 text-right font-mono ' + (p && p.netProfit < 0 ? 'text-red-600' : 'text-green-600') + '">' + (p ? X.fmt(p.netProfit) : '—') + '</td>' +
         '<td class="p-3 text-center">' + (locked ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-gray-800 text-white"><i class="fas fa-lock mr-1"></i>Clôturé</span>' : '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">Ouvert</span>') + '</td>' +
         '<td class="p-3 text-xs text-gray-500">' + (locked ? E(X.fmtTs(c.closedAt)) + ' · ' + E(c.by || '') : (c && c.reopenedAt ? 'Rouvert le ' + E(X.fmtTs(c.reopenedAt)) + (c.reopenReason ? ' — ' + E(c.reopenReason) : '') : '')) + '</td>' +
@@ -238,10 +239,14 @@
   //  BILAN MENSUEL
   // =====================================================================
   function bilan(month) {
-    var r = X.monthRange(month), p = getProfitSummaryYmd(r.from, r.to), cats = {}, usd = 0, unpaidSales = 0, payroll = 0, nTx = 0;
+    var r = X.monthRange(month), cl0 = closures()[month], p = getProfitSummaryYmd(r.from, r.to), cats = {}, usd = 0, unpaidSales = 0, payroll = 0, nTx = 0;
+    if (cl0 && cl0.locked && cl0.revenue !== undefined) {               // mois clôturé : on relit les chiffres figés à la clôture
+      var fz = { revenue: Number(cl0.revenue || 0), cost: Number(cl0.cost || 0), expenses: Number(cl0.expenses || 0), usdtExpensesDzd: 0 };
+      fz.grossProfit = fz.revenue - fz.cost; fz.netProfit = Number(cl0.net || 0); fz.txCount = Number(cl0.txCount || 0); p = Object.assign({}, p, fz);
+    }
     (appState.expenses || []).forEach(function (e) { if (e && String(e.date).slice(0, 7) === month) { var c = e.category || 'Sans catégorie'; cats[c] = (cats[c] || 0) + Number(e.amount || 0); } });
-    (appState.transactions || []).forEach(function (t) { if (X.valid(t) && String(t.date).slice(0, 7) === month) { usd += Number(t.amount || 0); nTx++; if (!t.paid) unpaidSales += Number(t.priceDzd || 0); } });
-    (appState.employeePayments || []).forEach(function (e) { if (e && e.paid && (e.period || String(e.date).slice(0, 7)) === month && e.type !== 'frais' && e.type !== 'autre') payroll += Number(e.amount || 0); });
+    (appState.transactions || []).forEach(function (t) { if (X.valid(t) && !/^tx-emp-/.test(String(t.id || '')) && Number(t.priceDzd || 0) > 0 && String(t.date).slice(0, 7) === month) { usd += Number(t.amount || 0); nTx++; if (!t.paid) unpaidSales += Number(t.priceDzd || 0); } });
+    (appState.employeePayments || []).forEach(function (e) { if (e && e.paid && String(e.date).slice(0, 7) === month && e.type !== 'frais' && e.type !== 'autre') payroll += Number(e.amount || 0); });   // par date de paiement (comme le résultat net)
     var receivables = (appState.clients || []).reduce(function (s, c) { return s + Math.max(0, Number(c.unpaid || 0)); }, 0);
     var cl = closures()[month], bal = (cl && cl.locked && cl.balances) ? cl.balances : (function () { if (typeof recalculateFinanceBalances === 'function') recalculateFinanceBalances(); return appState.balances || {}; })();
     return { month: month, p: p, cats: cats, usd: usd, unpaidSales: unpaidSales, payroll: payroll, receivables: receivables, balances: bal, closed: !!(cl && cl.locked), nTx: nTx };
@@ -252,7 +257,7 @@
     var body = '<div class="flex flex-wrap items-center gap-3 mb-4"><input type="month" value="' + E(m) + '" onchange="accBilanMonth(this.value)" class="' + X.input + '">' + (d.closed ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-gray-800 text-white"><i class="fas fa-lock mr-1"></i>Mois clôturé</span>' : '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">Mois ouvert (chiffres provisoires)</span>') +
       '<span class="flex-1"></span>' + X.btn('CSV', 'accBilanCsv()', 'border dark:border-gray-600 text-gray-700 dark:text-gray-200', 'fa-file-csv') + X.btn('PDF pour le comptable', 'accBilanDoc()', null, 'fa-file-pdf') + '</div>' +
       '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">' + X.kpi('Chiffre d\'affaires', X.fmt(p.revenue), '', 'fa-sack-dollar') + X.kpi('Coût des ventes (USD)', X.fmt(p.cost), 'text-gray-700 dark:text-gray-200', 'fa-coins') + X.kpi('Marge brute', X.fmt(p.grossProfit), 'text-indigo-600', 'fa-chart-line') + X.kpi('Résultat net', X.fmt(p.netProfit), p.netProfit < 0 ? 'text-red-600' : 'text-green-600', 'fa-scale-balanced') + '</div>' +
-      '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">' + X.kpi('Frais du mois', X.fmt(p.expenses + p.usdtExpensesDzd), 'text-red-600', 'fa-receipt') + X.kpi('Salaires payés', X.fmt(d.payroll), '', 'fa-users') + X.kpi('Ventes non encaissées', X.fmt(d.unpaidSales), 'text-amber-600', 'fa-hourglass-half') + X.kpi('Créances clients (actuelles)', X.fmt(d.receivables), 'text-red-600', 'fa-user-clock') + '</div>' +
+      '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">' + X.kpi('Frais du mois', X.fmt(p.expenses + p.usdtExpensesDzd), 'text-red-600', 'fa-receipt') + X.kpi('Salaires payés', X.fmt(d.payroll), '', 'fa-users') + X.kpi('Ventes du mois sans paiement immédiat', X.fmt(d.unpaidSales), 'text-amber-600', 'fa-hourglass-half') + X.kpi('Créances clients (actuelles)', X.fmt(d.receivables), 'text-red-600', 'fa-user-clock') + '</div>' +
       '<h4 class="font-bold text-gray-800 dark:text-white mb-2">Frais par catégorie</h4>' + X.table([['Catégorie'], ['Montant', 'r']], cats.map(function (c) { return '<tr><td class="p-3">' + E(c) + '</td><td class="p-3 text-right font-mono">' + X.fmt(d.cats[c]) + '</td></tr>'; }).join(''), { empty: 'Aucun frais ce mois' });
     return X.card('Bilan mensuel — ' + X.monthLabel(m), 'fa-file-invoice-dollar', body);
   }
@@ -282,20 +287,34 @@
   // =====================================================================
   function statementData(clientId, from, to) {
     var c = X.find(appState.clients, clientId); if (!c) return null;
-    var ev = [];
+    var FC = window.FinanceCore && FinanceCore.active() ? FinanceCore : null, ev = [];
+    if (FC) {                                                           // nouveau départ : solde au départ, puis seulement les mouvements depuis
+      var cf = FC.config(), op = Number((cf.clientOpening || {})[clientId] || 0);
+      ev.push({ date: cf.date, ts: 0, label: 'Solde au départ (nouvelle comptabilité)', debit: op > 0 ? op : 0, credit: op < 0 ? -op : 0, note: '' });
+    }
     (appState.transactions || []).forEach(function (t) {
-      if (t.clientId !== clientId || !X.valid(t)) return;
-      if ((from && t.date < from) || (to && t.date > to)) return;
-      ev.push({ date: t.date, ts: t.createdAt || 0, label: 'Vente — ' + (t.offerName || '') + (t.duration || t.customDurationDays ? ' (' + (t.duration || t.customDurationDays) + ' j)' : ''), debit: Number(t.priceDzd || 0), credit: t.paid ? Number(t.priceDzd || 0) : 0, note: t.paid ? 'réglée' : 'impayée' });
+      if (t.clientId !== clientId || !X.valid(t) || /^tx-emp-/.test(String(t.id || ''))) return;
+      if (FC && !FC.inLedger(t)) return;
+      // une vente payée tout de suite est soldée sur la même ligne ; payée « par avance », elle consomme un paiement déjà enregistré (pas de 2e crédit)
+      var settled = t.paid && t.paidAccount !== 'avance';
+      ev.push({ date: t.date, ts: t.createdAt || 0, label: 'Vente — ' + (t.offerName || '') + (t.duration || t.customDurationDays ? ' (' + (t.duration || t.customDurationDays) + ' j)' : ''), debit: Number(t.priceDzd || 0), credit: settled ? Number(t.priceDzd || 0) : 0, note: settled ? 'réglée' : (t.paid ? 'payée par avance' : '') });
     });
     (appState.payments || []).forEach(function (p) {
       if (p.clientId !== clientId) return;
-      if ((from && p.date < from) || (to && p.date > to)) return;
+      if (FC && !FC.inLedger(p)) return;
       ev.push({ date: p.date, ts: p.createdAt || 0, label: 'Paiement reçu (' + (p.method || '') + ')' + (p.note ? ' — ' + p.note : ''), debit: 0, credit: Number(p.amount || 0), note: '' });
     });
     ev.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)) || (a.ts - b.ts); });
-    var run = 0, td = 0, tc = 0; ev.forEach(function (e) { run += e.debit - e.credit; e.balance = run; td += e.debit; tc += e.credit; });
-    return { client: c, rows: ev, debit: td, credit: tc, balance: run };
+    var run = 0, carried = 0, rows = [], td = 0, tc = 0;
+    ev.forEach(function (e) {
+      run += e.debit - e.credit;
+      if (from && e.date < from) { carried = run; return; }
+      if (to && e.date > to) return;
+      e.balance = run; rows.push(e); td += e.debit; tc += e.credit;
+    });
+    if (from && carried !== 0) rows.unshift({ date: from, ts: 0, label: 'Solde reporté au ' + X.fmtDate(from), debit: carried > 0 ? carried : 0, credit: carried < 0 ? -carried : 0, balance: carried, note: '' });
+    var bal = rows.length ? rows[rows.length - 1].balance : carried;
+    return { client: c, rows: rows, debit: td, credit: tc, balance: bal };
   }
   function renderStatement() {
     var u = ui(), opts = (appState.clients || []).slice().sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); }).map(function (c) { return '<option value="' + E(c.id) + '"' + (c.id === u.stClient ? ' selected' : '') + '>' + E(c.name || 'Client') + (Number(c.unpaid) > 0 ? ' — dette ' + E(X.fmt(c.unpaid)) : '') + '</option>'; }).join('');
@@ -417,7 +436,7 @@
       '<div class="mb-4">' + f('legalNote', 'Mention légale en bas des documents', P.legalNote, 'optionnel — à valider avec votre comptable') + '</div>' +
       '<div class="mb-4"><label class="block text-xs font-bold text-gray-500 mb-1">Moyens de paiement affichés sur facture / devis / relevé</label><input id="pf-paymentNote" value="' + E(P.paymentNote) + '" placeholder="ex : CCP 0044032948 clé 28 — BaridiMob 0079… " class="' + X.input + ' w-full"><label class="flex items-center gap-2 mt-2 text-sm text-gray-700 dark:text-gray-200"><input type="checkbox" id="pf-showPayment" ' + (P.showPayment ? 'checked' : '') + '> Afficher ces informations sur les documents</label></div>' +
       '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4"><div><label class="block text-xs font-bold text-gray-500 mb-1">Numérotation des factures</label><select id="pf-invoiceNumbering" class="' + X.input + ' w-full"><option value="legacy"' + (P.invoiceNumbering !== 'sequential' ? ' selected' : '') + '>Actuelle (INV-date-identifiant) — inchangée</option><option value="sequential"' + (P.invoiceNumbering === 'sequential' ? ' selected' : '') + '>Séquentielle (FAC-2026-0001, figée à la 1ère émission)</option></select><p class="text-[11px] text-gray-400 mt-1">La séquentielle ne s\'applique qu\'aux factures ouvertes après activation ; les anciennes gardent leur numéro.</p></div>' +
-      '<div><label class="block text-xs font-bold text-gray-500 mb-1">Lien paie ↔ caisses</label><label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200"><input type="checkbox" id="pf-payrollLink" class="mt-1" ' + (S.get('payrollLink', false) ? 'checked' : '') + '><span>Enregistrer automatiquement chaque salaire <b>payé</b> dans les Frais (catégorie « Salaires »), ce qui le déduit de la caisse.<br><span class="text-[11px] text-amber-600">⚠ À n\'activer que si vos salaires ne sont pas déjà saisis en Frais ou en charges fixes (risque de doublon).</span></span></label></div></div>' +
+      '<div><label class="block text-xs font-bold text-gray-500 mb-1">Lien paie ↔ caisses</label><label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200"><input type="checkbox" id="pf-payrollLink" class="mt-1" checked disabled><span>Toujours actif : chaque salaire <b>payé</b> est enregistré automatiquement dans les Frais (catégorie « Salaires ») et déduit de la caisse, une seule fois.<br><span class="text-[11px] text-amber-600">⚠ Ne saisissez donc pas vos salaires à la main dans les Frais ni en charges fixes : ils seraient comptés deux fois.</span></span></label></div></div>' +
       X.btn('Enregistrer le profil', 'accProfileSave()', null, 'fa-check');
     return X.card('Profil entreprise & réglages', 'fa-building', body);
   }
@@ -426,7 +445,7 @@
     ['name', 'tagline', 'email', 'phone', 'address1', 'address2', 'nif', 'rc', 'nis', 'ai', 'legalNote', 'paymentNote', 'invoiceNumbering'].forEach(function (k) { P[k] = g(k); });
     if (!P.name) return X.toast('Le nom est requis', 'error');
     P.showPayment = document.getElementById('pf-showPayment').checked;
-    S.set('profile', P, true); S.set('payrollLink', document.getElementById('pf-payrollLink').checked, true);
+    S.set('profile', P, true); S.set('payrollLink', true, true);
     X.log('Profil entreprise modifié', P.name + ' — numérotation ' + P.invoiceNumbering + ' — lien paie↔caisses ' + (S.get('payrollLink') ? 'activé' : 'désactivé')); X.save(); X.toast('Profil enregistré', 'success'); X.rerender();
   };
 

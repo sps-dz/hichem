@@ -113,6 +113,18 @@ window.recalculateFinanceBalances = function() {
 window.getTransactionBuyRate = function(t) {
   const own = Number(t && t.buyRate);
   if (Number.isFinite(own) && own > 0) return own;
+  return getLegacyBuyRate();
+};
+// Taux appliqué aux anciennes ventes enregistrées sans taux : figé une fois pour toutes (au premier calcul après chargement
+// des réglages), pour qu'un changement du taux du jour ne modifie plus les bénéfices des mois passés.
+window.getLegacyBuyRate = function() {
+  try {
+    if (window.ExtStore && appState && appState.globalConfig && appState.globalConfig.rates) {
+      let lr = Number(ExtStore.get('legacyBuyRate', 0));
+      if (!(lr > 0)) { lr = Number(getBuyRate()) || 255; ExtStore.set('legacyBuyRate', lr, true); }
+      return lr;
+    }
+  } catch (e) {}
   return typeof getBuyRate === 'function' ? getBuyRate() : 255;
 };
 
@@ -164,6 +176,56 @@ function endOfMonth(d) {
   return x;
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// Éléments du résultat d'une période — UNE seule définition partagée par tous les écrans
+// (tableau de bord, Ma finance, Comptabilité, Clôtures, Pilotage, PDF).
+//  • CA = ventes validées (hors « problème », hors tâches de Performance) + versements studio / shooting reçus
+//  • Coût = dollars de chaque vente × son taux d'achat figé
+//  • Frais = frais saisis (dont salaires liés à la paie) + salaires payés sans frais lié (jamais deux fois)
+//  • Dépenses USDT = coût enregistré (costDzd) sinon dollars × taux d'achat figé de la dépense ; rattachées à leur mois
+// ---------------------------------------------------------------------------------------------
+function _isSaleRow(t) { return t && t.date && t.status !== 'problem' && !/^tx-emp-/.test(String(t.id || '')); }
+function _profitParts(start, end, splitRecurring) {
+  const legacy = (typeof getLegacyBuyRate === 'function') ? getLegacyBuyRate() : 255;
+  let revenue = 0, cost = 0, txCount = 0, studioRevenue = 0, expenses = 0, oneTime = 0, recurringPaid = 0, salariesUnlinked = 0, usdtExpensesDzd = 0;
+  (appState.transactions || []).forEach(t => {
+    if (!_isSaleRow(t) || !inRangeYmd(t.date, start, end)) return;
+    const price = Number(t.priceDzd || 0), amt = Number(t.amount || 0);
+    revenue += Number.isFinite(price) ? price : 0;
+    cost += (Number.isFinite(amt) ? amt : 0) * getTransactionBuyRate(t);
+    if (price > 0) txCount += 1;
+  });
+  const S = window.ExtStore;
+  if (S) ['studioBookings', 'productShoots'].forEach(k => (S.list(k) || []).forEach(r => (r && r.payments || []).forEach(p => {
+    if (p && inRangeYmd(p.date, start, end)) studioRevenue += Number(p.amount || 0) || 0;
+  })));
+  revenue += studioRevenue;
+  const linked = {};
+  (appState.expenses || []).forEach(e => {
+    if (!e) return;
+    if (e.payrollPaymentId) linked[e.payrollPaymentId] = 1;
+    if (/^exp_pay_/.test(String(e.id || ''))) linked[String(e.id).slice(8)] = 1;
+    if (!e.date || !inRangeYmd(e.date, start, end)) return;
+    const amt = Number.isFinite(Number(e.amount)) ? Number(e.amount) : 0;
+    expenses += amt;
+    if (e.recurringGenerated) recurringPaid += amt; else oneTime += amt;
+  });
+  (appState.employeePayments || []).forEach(p => {
+    if (!p || !p.paid || linked[p.id] || !(Number(p.amount) > 0) || !p.date || !inRangeYmd(p.date, start, end)) return;
+    salariesUnlinked += Number(p.amount);
+  });
+  expenses += salariesUnlinked; oneTime += salariesUnlinked;
+  (appState.usdtExpenses || []).forEach(e => {
+    if (!e) return;
+    const when = /^\d{4}-\d{2}$/.test(String(e.month || '')) ? e.month + '-01' : e.date;   // rattachée au mois concerné
+    if (!when || !inRangeYmd(when, start, end)) return;
+    const c = Number(e.costDzd);
+    usdtExpensesDzd += (Number.isFinite(c) && c > 0) ? c : (Number(e.amount || 0) || 0) * (Number(e.buyRate) > 0 ? Number(e.buyRate) : legacy);
+  });
+  return { revenue, cost, txCount, studioRevenue, expenses, oneTime, recurringPaid, salariesUnlinked, usdtExpensesDzd };
+}
+
 window.getProfitSummaryYmd = function(fromYmd, toYmd) {
   const from = parseYmd(fromYmd);
   const to = parseYmd(toYmd);
@@ -171,44 +233,12 @@ window.getProfitSummaryYmd = function(fromYmd, toYmd) {
   const start = from.getTime() <= to.getTime() ? from : to;
   const end = from.getTime() <= to.getTime() ? to : from;
 
-  const buyRate = typeof getBuyRate === 'function' ? getBuyRate() : 255;
-
-  let revenue = 0;
-  let cost = 0;
-  let txCount = 0;
-
-  (appState.transactions || []).forEach(t => {
-    if (!t || !t.date) return;
-    if (t.status === 'problem') return; // Ignorer les problèmes dans le profit
-    
-    if (!inRangeYmd(t.date, start, end)) return;
-    const price = Number(t.priceDzd || 0);
-    const amt = Number(t.amount || 0);
-    revenue += Number.isFinite(price) ? price : 0;
-    cost += (Number.isFinite(amt) ? amt : 0) * getTransactionBuyRate(t);
-    txCount += 1;
-  });
-
-  let expenses = 0;
-  (appState.expenses || []).forEach(e => {
-    if (!e || !e.date) return;
-    if (!inRangeYmd(e.date, start, end)) return;
-    const amt = Number(e.amount || 0);
-    expenses += Number.isFinite(amt) ? amt : 0;
-  });
-
-  let usdtExpensesDzd = 0;
-  (appState.usdtExpenses || []).forEach(e => {
-    if (!e || !e.date) return;
-    if (!inRangeYmd(e.date, start, end)) return;
-    const amt = Number(e.amount || 0);
-    usdtExpensesDzd += (Number.isFinite(amt) ? amt : 0) * buyRate;
-  });
-
+  const P = _profitParts(start, end);
+  const revenue = P.revenue, cost = P.cost, expenses = P.expenses, usdtExpensesDzd = P.usdtExpensesDzd, txCount = P.txCount, studioRevenue = P.studioRevenue;
   const grossProfit = revenue - cost;
   const netProfit = grossProfit - expenses - usdtExpensesDzd;
 
-  return { revenue, cost, expenses, usdtExpensesDzd, grossProfit, netProfit, txCount, fromYmd, toYmd };
+  return { revenue, cost, expenses, usdtExpensesDzd, grossProfit, netProfit, txCount, studioRevenue, fromYmd, toYmd };
 };
 
 /**
@@ -245,49 +275,20 @@ window.getAccrualProfitSummaryYmd = function(fromYmd, toYmd) {
   const start = from.getTime() <= to.getTime() ? from : to;
   const end = from.getTime() <= to.getTime() ? to : from;
 
-  const buyRate = typeof getBuyRate === 'function' ? getBuyRate() : 255;
   const days = daysBetweenYmdInclusive(fromYmd, toYmd) || 1;
+  const P = _profitParts(start, end);
+  const revenue = P.revenue, cost = P.cost, txCount = P.txCount, oneTimeExpenses = P.oneTime, recurringPaidThisPeriod = P.recurringPaid, usdtExpensesDzd = P.usdtExpensesDzd;
 
-  let revenue = 0;
-  let cost = 0;
-  let txCount = 0;
-  (appState.transactions || []).forEach(t => {
-    if (!t || !t.date) return;
-    if (t.status === 'problem') return;
-    if (!inRangeYmd(t.date, start, end)) return;
-    const price = Number(t.priceDzd || 0);
-    const amt = Number(t.amount || 0);
-    revenue += Number.isFinite(price) ? price : 0;
-    cost += (Number.isFinite(amt) ? amt : 0) * getTransactionBuyRate(t);
-    txCount += 1;
-  });
-
-  // Charges ponctuelles : tout sauf les dépenses auto-générées par une charge fixe
-  // (celles-ci sont étalées plus bas, pour ne pas être comptées deux fois).
-  let oneTimeExpenses = 0;
-  let recurringPaidThisPeriod = 0;
-  (appState.expenses || []).forEach(e => {
-    if (!e || !e.date) return;
-    if (!inRangeYmd(e.date, start, end)) return;
-    const amt = Number.isFinite(Number(e.amount)) ? Number(e.amount) : 0;
-    if (e.recurringGenerated) {
-      recurringPaidThisPeriod += amt;
-    } else {
-      oneTimeExpenses += amt;
-    }
-  });
-
-  let usdtExpensesDzd = 0;
-  (appState.usdtExpenses || []).forEach(e => {
-    if (!e || !e.date) return;
-    if (!inRangeYmd(e.date, start, end)) return;
-    const amt = Number(e.amount || 0);
-    usdtExpensesDzd += (Number.isFinite(amt) ? amt : 0) * buyRate;
-  });
-
-  // Charges fixes étalées au prorata (comptabilité d'engagement)
+  // Charges fixes étalées au prorata des jours RÉELS de chaque mois (février = 28/29 jours, pas 30)
   const recurringMonthlyTotal = (appState.recurringExpenses || []).reduce((s, r) => s + Number(r && r.amount || 0), 0);
-  const accruedRecurring = (recurringMonthlyTotal / 30) * days;
+  let accruedRecurring = 0;
+  if (recurringMonthlyTotal > 0) {
+    const d = new Date(start);
+    while (d.getTime() <= end.getTime()) {
+      accruedRecurring += recurringMonthlyTotal / new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(d.getDate() + 1);
+    }
+  }
 
   const grossProfit = revenue - cost;
   const netProfit = grossProfit - oneTimeExpenses - usdtExpensesDzd - accruedRecurring;

@@ -30,6 +30,7 @@
 
   // ------------------------------------------------------------------ 2) solde clients recalculé
   function expectedUnpaid(c) {
+    if (window.FinanceCore && FinanceCore.active()) return FinanceCore.expectedUnpaid(c.id);   // nouveau départ : solde de départ + mouvements depuis
     var due = 0, paid = 0;
     (appState.transactions || []).forEach(function (t) {
       if (!t || isTaskEntry(t) || t.clientId !== c.id) return;
@@ -40,6 +41,7 @@
     return due - paid;
   }
   function clientGaps() {
+    if (window.FinanceCore && FinanceCore.active()) return FinanceCore.clientGaps();
     var exp = {};                                              // une seule passe (rapide même avec des milliers de lignes)
     (appState.transactions || []).forEach(function (t) {
       if (!t || isTaskEntry(t) || !t.clientId || t.status === 'problem') return;
@@ -51,10 +53,11 @@
   }
 
   // ------------------------------------------------------------------ 3) lignes anormales
+  function inL(o) { return !(window.FinanceCore && FinanceCore.active()) || FinanceCore.inLedger(o); }   // après le nouveau départ : seules les lignes de la nouvelle période
   function anomalies() {
     var out = [], today = X.today(), cl = {}; clients().forEach(function (c) { cl[c.id] = c; });
     (appState.transactions || []).forEach(function (t) {
-      if (!t || isTaskEntry(t)) return;
+      if (!t || isTaskEntry(t) || !inL(t)) return;
       if (t.status === 'completed' && (t.totalDzd || t.dollarAmount)) return;   // ancien format : voir l'onglet « Anciennes ventes »
       var why = [];
       if (!t.clientId || !cl[t.clientId]) why.push(t.clientId ? 'client introuvable' : 'sans client');
@@ -76,11 +79,11 @@
     });
     var seen = {};
     (appState.payments || []).slice().sort(function (a, b) { return num(a.createdAt) - num(b.createdAt); }).forEach(function (p) {
-      if (!p) return; var why = [];
+      if (!p || !inL(p)) return; var why = [];
       if (!(num(p.amount) > 0)) why.push('montant nul ou négatif');
       if (!p.clientId || !cl[p.clientId]) why.push('client introuvable');
       var k = p.clientId + '|' + num(p.amount) + '|' + (p.method || ''), last = seen[k];
-      if (last !== undefined && Math.abs(num(p.createdAt) - last) < 120000) why.push('doublon probable (même client, même montant, moins de 2 min)');
+      if (last !== undefined && num(p.createdAt) > 0 && last > 0 && Math.abs(num(p.createdAt) - last) < 120000) why.push('doublon probable (même client, même montant, moins de 2 min)');
       seen[k] = num(p.createdAt);
       if (why.length) out.push({ kind: 'pay', id: p.id, label: (p.clientName || '—') + ' · ' + (p.method || ''), date: p.date, amount: p.amount, why: why });
     });
@@ -90,7 +93,7 @@
   // ------------------------------------------------------------------ 4) taux des achats USD (plage plausible 240–265 DA)
   var RATE_MIN = 240, RATE_MAX = 265, RATE_FIX = 252;
   function rateIssues() {
-    return (appState.usdPurchases || []).filter(Boolean).map(function (u) {
+    return (appState.usdPurchases || []).filter(function (u) { return u && inL(u); }).map(function (u) {
       var r = num(u.rate), a = num(u.amount), t = num(u.totalDzd), why = [];
       if (!(r >= RATE_MIN && r <= RATE_MAX)) why.push('taux ' + r + ' hors de ' + RATE_MIN + '–' + RATE_MAX);
       if (Math.abs(a * r - t) > 1) why.push('total ≠ montant × taux (' + X.fmt(t) + ' au lieu de ' + X.fmt(a * r) + ')');

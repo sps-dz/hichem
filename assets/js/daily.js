@@ -12,7 +12,7 @@
   function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
   function ro() { return typeof window.isReadOnlySession === 'function' && window.isReadOnlySession(); }
   function isTask(t) { return t && /^tx-emp-/.test(String(t.id || '')); }
-  function bal() { var b = appState.balances || {}; return { liquide: num(b.liquide), baridimob: num(b.baridimob) }; }
+  function bal() { if (typeof recalculateFinanceBalances === 'function') recalculateFinanceBalances(); var b = appState.balances || {}; return { liquide: num(b.liquide), baridimob: num(b.baridimob) }; }
   function closings() { return S.list('cashClosings'); }
   function gapCls(g) { return Math.abs(g) < 1 ? 'text-green-600' : 'text-red-600'; }
   function gapTxt(g) { return Math.abs(g) < 1 ? 'Aucun écart ✔' : (g > 0 ? 'Il y a ' + X.fmt(g) + ' de PLUS que prévu' : 'Il MANQUE ' + X.fmt(-g)); }
@@ -89,7 +89,7 @@
       if (t.date === yday) { yN++; ySales += num(t.priceDzd); }
       var e = endOf(t); if (e && e >= today && e <= tomo) ending.push({ t: t, e: e });
     });
-    (appState.payments || []).forEach(function (p) { if (p && p.date === yday) yPay += num(p.amount); });
+    if (window.FinanceCore) yPay = FinanceCore.received(yday, yday); else (appState.payments || []).forEach(function (p) { if (p && p.date === yday) yPay += num(p.amount); });   // même « encaissé » que Ma finance
     var owe = (appState.clients || []).filter(function (cl) { return num(cl.unpaid) > 0; }).sort(function (a, b2) { return num(b2.unpaid) - num(a.unpaid); });
     var oweTot = owe.reduce(function (s, cl) { return s + num(cl.unpaid); }, 0);
     var last = closings()[0], doneToday = last && last.date === today;

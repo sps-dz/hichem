@@ -115,6 +115,11 @@
       COLLECTIONS.forEach(function (c) {
         var have = {}; (appState[c] || []).forEach(function (d) { if (d && d.id) have[d.id] = 1; });
         var missing = (rec.data[c] || []).filter(function (d) { return d && d.id && !have[d.id]; });
+        if (c === 'todoTransactions') {
+          // une To-Do absente parce qu'elle a été VALIDÉE (devenue une vente) ne doit pas revenir : elle serait comptée deux fois
+          var done = {}; (appState.transactions || []).forEach(function (t) { if (t && t.createdAt) done[t.clientId + '|' + t.createdAt] = 1; });
+          missing = missing.filter(function (d) { return !done[d.clientId + '|' + d.createdAt]; });
+        }
         if (typeof filterSafeDocs === 'function') missing = filterSafeDocs(missing, c);
         if (missing.length) { plan.push([c, missing]); total += missing.length; }
       });
@@ -127,6 +132,15 @@
           if (!Array.isArray(appState[p[0]])) appState[p[0]] = [];
           p[1].forEach(function (d) {
             appState[p[0]].push(d);
+            // la dette du client suit les éléments récupérés (paiement : − ; vente non payée ou payée par avance : +)
+            try {
+              var cl = d.clientId ? (appState.clients || []).find(function (x) { return x.id === d.clientId; }) : null;
+              if (cl && typeof adjustClientUnpaid === 'function') {
+                if (p[0] === 'payments') adjustClientUnpaid(cl, -Number(d.amount || 0));
+                else if (p[0] === 'transactions' && d.status !== 'problem' && !/^tx-emp-/.test(String(d.id || '')) && (!d.paid || d.paidAccount === 'avance')) adjustClientUnpaid(cl, Number(d.priceDzd || 0));
+                cl.updatedAt = Date.now();
+              }
+            } catch (e) {}
             for (var i = pend.length - 1; i >= 0; i--) if (pend[i].col === p[0] && pend[i].id === d.id) pend.splice(i, 1);
           });
         });
