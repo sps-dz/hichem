@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio — Équipe</title>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --ink:#1d1d1b; --mute:#6b6a66; --line:#e3e1dc; --accent:#1f5f4a; --bad:#a3322a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#151514; --card:#1f1f1d; --ink:#eeede9; --mute:#9d9b95; --line:#33322f; --accent:#6cc3a2; --bad:#e2857c; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  p.mute, .mute { color: var(--mute); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  input, select { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  .row { display: grid; grid-template-columns: 1fr 1fr 140px auto; gap: 8px; align-items: end; }
+  @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+  label { font-size: 13px; color: var(--mute); display: grid; gap: 4px; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 13px; color: var(--mute); font-weight: 500; }
+  .msg { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg); white-space: pre-wrap; word-break: break-word; }
+  .msg.bad { color: var(--bad); }
+  .tablewrap { overflow-x: auto; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Studio — Équipe</h1>
+  <p class="mute">Comptes et rôles de l'équipe. Toutes les actions sont vérifiées par le serveur et notées dans le journal d'audit.</p>
+
+  <section id="signedOut">
+    <h2>Connexion</h2>
+    <p class="mute">Connecte-toi avec ton compte Google (e-mail vérifié), ou avec l'e-mail et le mot de passe reçus de l'admin.</p>
+    <button class="primary" id="google">Se connecter avec Google</button>
+    <div style="display:grid; gap:8px; margin-top:12px; max-width:360px">
+      <input id="email" type="email" placeholder="E-mail" autocomplete="username">
+      <input id="password" type="password" placeholder="Mot de passe" autocomplete="current-password">
+      <button id="emailLogin">Se connecter</button>
+    </div>
+  </section>
+
+  <section id="signedIn" hidden>
+    <h2>Mon compte</h2>
+    <p><span id="me"></span> — rôle : <strong id="myRole">aucun</strong></p>
+    <button id="bootstrap" class="primary" hidden>Devenir administrateur</button>
+    <button id="logout">Se déconnecter</button>
+  </section>
+
+  <section id="adminPanel" hidden>
+    <h2>Ajouter un membre</h2>
+    <div class="row">
+      <label>Nom<input id="newName" placeholder="Amel B."></label>
+      <label>E-mail<input id="newEmail" type="email" placeholder="amel@exemple.com"></label>
+      <label>Rôle
+        <select id="newRole">
+          <option value="employee">Employé</option>
+          <option value="accountant">Comptable</option>
+          <option value="admin">Administrateur</option>
+        </select>
+      </label>
+      <button class="primary" id="create">Créer</button>
+    </div>
+    <h2 style="margin-top:20px">Équipe</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>État</th><th></th></tr></thead>
+      <tbody id="staffRows"></tbody>
+    </table></div>
+  </section>
+
+  <div id="msg" class="msg" hidden></div>
+</main>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+  import { getFirestore, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js";
+
+  // À remplir avec la configuration du projet Firebase du studio
+  // (Console Firebase → Paramètres du projet → Vos applications → Application Web).
+  const firebaseConfig = {
+    apiKey: "REMPLACER",
+    authDomain: "REMPLACER.firebaseapp.com",
+    projectId: "REMPLACER",
+    appId: "REMPLACER",
+  };
+
+  const $ = (id) => document.getElementById(id);
+  if (Object.values(firebaseConfig).some((v) => String(v).includes("REMPLACER"))) {
+    document.querySelector("main").insertAdjacentHTML("beforeend",
+      '<section><h2>Projet Firebase pas encore relié</h2><p class="mute">Cette page fonctionnera dès que le projet Firebase du studio sera créé et que sa configuration sera collée dans <code>studio/web/admin/index.html</code> (étape 9 du guide <code>studio/README.md</code>).</p></section>');
+    $("signedOut").hidden = true;
+    throw new Error("Configuration Firebase du studio manquante.");
+  }
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const fns = getFunctions(app, "europe-west1");
+  const call = (name, data) => httpsCallable(fns, name)(data).then((r) => r.data);
+
+  const ROLE_LABEL = { admin: "Administrateur", employee: "Employé", accountant: "Comptable" };
+
+  function show(text, bad = false) {
+    const m = $("msg");
+    m.textContent = text;
+    m.className = "msg" + (bad ? " bad" : "");
+    m.hidden = false;
+  }
+  const fail = (e) => show(e?.message || String(e), true);
+
+  async function busy(btn, fn) {
+    btn.disabled = true;
+    try { await fn(); } catch (e) { fail(e); } finally { btn.disabled = false; }
+  }
+
+  $("google").onclick = (e) => busy(e.target, () => signInWithPopup(auth, new GoogleAuthProvider()));
+  $("emailLogin").onclick = (e) => busy(e.target, () => signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value));
+  $("logout").onclick = () => signOut(auth);
+
+  $("bootstrap").onclick = (e) => busy(e.target, async () => {
+    await call("staffBootstrapAdmin", {});
+    await auth.currentUser.getIdToken(true); // récupère le nouveau rôle
+    show("Tu es administrateur.");
+    await render(auth.currentUser);
+  });
+
+  $("create").onclick = (e) => busy(e.target, async () => {
+    const r = await call("staffCreate", { displayName: $("newName").value, email: $("newEmail").value, role: $("newRole").value });
+    show("Compte créé. Envoie ce lien à la personne pour qu'elle choisisse son mot de passe :\n" + r.passwordLink);
+    $("newName").value = ""; $("newEmail").value = "";
+    await loadStaff();
+  });
+
+  async function loadStaff() {
+    const snap = await getDocs(query(collection(db, "staff"), orderBy("displayName")));
+    const me = auth.currentUser?.uid;
+    const rows = $("staffRows");
+    rows.replaceChildren();
+    for (const d of snap.docs) {
+      const s = d.data();
+      const tr = document.createElement("tr");
+      const td = (t) => { const c = document.createElement("td"); c.textContent = t; tr.append(c); return c; };
+      td(s.displayName); td(s.email);
+      const roleCell = td("");
+      const sel = document.createElement("select");
+      for (const [v, l] of Object.entries(ROLE_LABEL)) sel.append(new Option(l, v, false, v === s.role));
+      sel.disabled = d.id === me;
+      sel.onchange = () => busy(sel, async () => { await call("staffSetRole", { uid: d.id, role: sel.value }); show("Rôle modifié. Il s'applique à sa prochaine connexion."); await loadStaff(); });
+      roleCell.append(sel);
+      td(s.disabled ? "Désactivé" : "Actif");
+      const act = td("");
+      if (d.id !== me) {
+        const b = document.createElement("button");
+        b.textContent = s.disabled ? "Réactiver" : "Désactiver";
+        b.onclick = () => busy(b, async () => { await call("staffSetDisabled", { uid: d.id, disabled: !s.disabled }); await loadStaff(); });
+        act.append(b);
+      }
+      rows.append(tr);
+    }
+  }
+
+  async function render(user) {
+    $("signedOut").hidden = !!user;
+    $("signedIn").hidden = !user;
+    $("adminPanel").hidden = true;
+    if (!user) return;
+    const token = await user.getIdTokenResult();
+    const role = token.claims.role || null;
+    $("me").textContent = user.email || user.uid;
+    $("myRole").textContent = role ? ROLE_LABEL[role] : "aucun";
+    $("bootstrap").hidden = role === "admin";
+    if (role === "admin") {
+      $("adminPanel").hidden = false;
+      await loadStaff().catch(fail);
+    }
+  }
+  onAuthStateChanged(auth, (u) => render(u).catch(fail));
+</script>
+</body>
+</html>
