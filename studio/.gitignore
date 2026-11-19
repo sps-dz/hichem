@@ -1,0 +1,7 @@
+node_modules/
+functions/build/
+*.log
+.firebase/
+# Paramètres réels du projet : ne pas publier
+functions/.env.*
+!functions/.env.demo-studio

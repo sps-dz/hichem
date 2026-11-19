@@ -1,0 +1,24 @@
+rules_version = '2';
+
+// Studio Hichem Sponsor — règles Cloud Storage.
+//
+// Les preuves de paiement et les justificatifs de dépenses ne sont jamais
+// accessibles directement : le client dépose sa preuve par un lien d'envoi
+// temporaire créé par une fonction, et l'admin l'ouvre par un lien de lecture
+// temporaire. Seules les photos publiques du studio sont lisibles par tous.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Photos du studio et des réalisations, affichées sur le site.
+    match /public/{path=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Tout le reste (payment-proofs/, expense-receipts/, backups…) est fermé.
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

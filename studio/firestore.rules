@@ -1,0 +1,100 @@
+rules_version = '2';
+
+// Studio Hichem Sponsor — règles Firestore.
+//
+// Principe : personne n'écrit depuis le navigateur. Toutes les écritures passent
+// par les Cloud Functions (SDK Admin, qui ne sont pas soumises à ces règles),
+// pour que chaque montant soit recalculé et chaque modification journalisée.
+// Les navigateurs ne font que lire, et seulement ce que leur rôle autorise.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Fonctions d'aide ----------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Membre de l'équipe : compte Firebase avec un rôle (custom claim posé par les
+    // fonctions), e-mail vérifié, fiche staff active. La fiche est relue à chaque
+    // requête : un compte désactivé perd l'accès tout de suite, sans attendre
+    // l'expiration de son jeton (1 h).
+    function staffDoc() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data;
+    }
+
+    function hasRole(roles) {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.role in roles
+        && exists(/databases/$(database)/documents/staff/$(request.auth.uid))
+        && staffDoc().disabled == false
+        && staffDoc().role == request.auth.token.role;
+    }
+
+    function isStaff()      { return hasRole(['admin', 'employee', 'accountant']); }
+    function isAdmin()      { return hasRole(['admin']); }
+    function isFinance()    { return hasRole(['admin', 'accountant']); }
+    function isOperations() { return hasRole(['admin', 'employee']); }
+
+    // ---------- Catalogue public (lecture par tout le monde) ----------
+
+    match /services/{id}        { allow read: if true; allow write: if false; }
+    match /packages/{id}        { allow read: if true; allow write: if false; }
+    match /addons/{id}          { allow read: if true; allow write: if false; }
+    match /pricingRules/{id}    { allow read: if true; allow write: if false; }
+    match /pricingPeriods/{id}  { allow read: if true; allow write: if false; }
+    match /volumeTiers/{id}     { allow read: if true; allow write: if false; }
+    match /specialDates/{id}    { allow read: if true; allow write: if false; }
+    match /studioHours/{id}     { allow read: if true; allow write: if false; }
+    match /studioClosures/{id}  { allow read: if true; allow write: if false; }
+    match /promotions/{id}      { allow read: if true; allow write: if false; }
+    match /bundleRules/{id}     { allow read: if true; allow write: if false; }
+    match /publicSettings/{id}  { allow read: if true; allow write: if false; }
+
+    // Disponibilités : un document par jour, avec seulement les tranches occupées
+    // (heure, type, fin du blocage). Aucune donnée client.
+    match /availability/{date}  { allow read: if true; allow write: if false; }
+
+    // ---------- Exploitation (admin + employé, et comptable en lecture) ----------
+
+    match /customers/{id}       { allow read: if isStaff(); allow write: if false; }
+    match /orders/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+      match /{sub=**}           { allow read: if isStaff(); allow write: if false; }
+    }
+    match /bookings/{id}        { allow read: if isStaff(); allow write: if false; }
+    match /quotes/{id}          { allow read: if isStaff(); allow write: if false; }
+    match /slots/{key}          { allow read: if isOperations(); allow write: if false; }
+    match /notifications/{id}   { allow read: if isOperations(); allow write: if false; }
+
+    // ---------- Argent (admin + comptable) ----------
+
+    match /payments/{id}          { allow read: if isFinance(); allow write: if false; }
+    match /paymentProofs/{id}     { allow read: if isFinance(); allow write: if false; }
+    match /expenses/{id}          { allow read: if isFinance(); allow write: if false; }
+    match /expenseCategories/{id} { allow read: if isFinance(); allow write: if false; }
+
+    // ---------- Administration (admin seulement) ----------
+
+    match /staff/{uid} {
+      // Chacun peut lire sa propre fiche (pour afficher son rôle) ; l'admin lit tout.
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow write: if false;
+    }
+    match /auditLogs/{id}        { allow read: if isAdmin(); allow write: if false; }
+    match /settings/{id}         { allow read: if isAdmin(); allow write: if false; }
+    match /promotionUsages/{id}  { allow read: if isAdmin(); allow write: if false; }
+    match /counters/{id}         { allow read: if isAdmin(); allow write: if false; }
+    match /systemJobs/{id}       { allow read: if isAdmin(); allow write: if false; }
+
+    // Liens privés des clients : jamais lisibles depuis un navigateur, même par
+    // l'admin. Seules les fonctions les vérifient.
+    match /customerAccess/{hash} { allow read, write: if false; }
+
+    // Tout le reste est fermé.
+    match /{document=**}         { allow read, write: if false; }
+  }
+}
