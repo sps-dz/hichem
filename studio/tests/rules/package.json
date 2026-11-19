@@ -1,0 +1,13 @@
+{
+  "name": "studio-rules-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 *.test.mjs",
+    "test:emulator": "firebase --config ../../firebase.json emulators:exec --only firestore,storage --project demo-studio \"npm test\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.19.0"
+  }
+}
