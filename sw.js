@@ -3,7 +3,7 @@
 // où une ancienne version mise en cache (CSS/JS) s'affichait tant que le
 // cache n'était pas invalidé manuellement. Le nom de cache est aussi changé
 // pour purger automatiquement l'ancien cache v5 chez tous les utilisateurs.
-const CACHE_NAME = 'sponsor-crm-cache-v21';
+const CACHE_NAME = 'sponsor-crm-cache-v22';
 const urlsToCache = [
   './',
   './index.html',
@@ -48,6 +48,7 @@ const urlsToCache = [
   './assets/js/clientprofit.js',
   './assets/js/studio.js',
   './assets/js/finance-core.js',
+  './assets/js/studio-platform.js',
   './assets/js/control.js'
 ];
 
@@ -70,6 +71,13 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   // Ne pas intercepter les requêtes Firebase ou CDN
   if (event.request.url.includes('firebase') || event.request.url.includes('googleapis') || event.request.url.includes('cdn')) {
+    return;
+  }
+  // v22 : seulement les fichiers du site lui-même (GET, même origine), et jamais la
+  // plateforme studio/ ni les appels à ses fonctions : aucune réponse d'un autre
+  // site (ni jeton dans une URL) ne finit dans le cache.
+  const reqUrl = new URL(event.request.url);
+  if (event.request.method !== 'GET' || reqUrl.origin !== self.location.origin || reqUrl.pathname.includes('/studio/')) {
     return;
   }
   // Réseau d'abord : on essaie toujours d'avoir la dernière version en ligne,
