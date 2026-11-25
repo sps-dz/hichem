@@ -15,6 +15,12 @@
   .rates th, .rates td { padding: 6px 4px; white-space: nowrap; }
   .optrow { display: grid; grid-template-columns: 1.2fr 110px 150px 2fr auto; gap: 8px; margin-bottom: 8px; }
   @media (max-width: 640px) { .optrow { grid-template-columns: 1fr 1fr; padding-bottom: 8px; border-bottom: 1px solid var(--line); } }
+  .list input { min-width: 90px; padding: 6px 8px; }
+  .list td, .list th { padding: 4px; }
+  .otherblock { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .otherblock > * { min-width: 0; }
+  .otherblock:first-child { border-top: 0; margin-top: 0; }
+  .otherblock h3 { margin: 0; font-size: 15px; }
   .order { border-top: 1px solid var(--line); padding: 12px 0; }
   .order:first-child { border-top: 0; }
   .order .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
@@ -148,6 +154,17 @@
     <div class="actions">
       <button class="primary" id="publishRates">Publier les nouveaux tarifs</button>
       <button id="resetRates">Annuler mes modifications</button>
+    </div>
+    <p class="mute small">« Publier » enregistre en une fois ce tableau et les « Autres tarifs » ci-dessous.</p>
+  </section>
+
+  <section id="otherPanel" hidden>
+    <h2>Autres tarifs</h2>
+    <p class="mute">Shooting produit, vidéo, montage et pub. Modifiez les prix puis « Publier les nouveaux tarifs » : le site client les affiche aussitôt. Les demandes déjà envoyées gardent leur prix.</p>
+    <div id="otherForm"></div>
+    <div class="actions">
+      <button class="primary" id="publishOther">Publier les nouveaux tarifs</button>
+      <button id="resetOther">Annuler mes modifications</button>
     </div>
   </section>
 
@@ -558,21 +575,123 @@
   };
   $("addOpt").onclick = () => { grid.addons.push({ name: "", price: 0, unit: "booking", description: "" }); renderGrid(); };
   $("resetRates").onclick = () => { grid = gridFromStudio(currentCatalog.studio); renderGrid(); show("Modifications annulées."); };
-  $("publishRates").onclick = (e) => busy(e.target, async () => {
+  $("publishRates").onclick = (e) => busy(e.target, publishAll);
+
+  // ---------- Autres tarifs (shooting produit, vidéo, montage, pub) ----------
+  let other = null;
+  const slugify = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+  function otherFromCatalog(c) {
+    const o = JSON.parse(JSON.stringify({ product: c.product, video: c.video, editing: c.editing, ad: c.ad }));
+    o.video.formatsText = (o.video.formats || []).join(", ");
+    return o;
+  }
+  function numField(label, obj, key, step = 100, min = 0) {
+    const i = input(obj[key], "", (v) => (obj[key] = v.trim() === "" ? 0 : Number(v)), "number");
+    i.min = String(min); i.step = String(step);
+    return el("label", {}, label, i);
+  }
+  function enabledBox(obj, label) {
+    const box = el("input", { type: "checkbox", checked: !!obj.enabled });
+    box.onchange = () => (obj.enabled = box.checked);
+    return el("label", { className: "check" }, box, label);
+  }
+  /** Tableau modifiable : une ligne par élément, colonnes [clé, titre, type, pas]. */
+  function listEditor(arr, cols, blank, addLabel, minRows = 0) {
+    const wrap = el("div");
+    const draw = () => {
+      const head = el("tr", {}, ...cols.map((c) => el("th", { textContent: c[1] })), el("th"));
+      const rows = arr.map((item, i) => el("tr", {}, ...cols.map(([key, title, type = "number", step = 100]) => {
+        const f = input(item[key] ?? "", "", (v) => (item[key] = type === "number" ? (v.trim() === "" ? 0 : Number(v)) : v), type);
+        if (type === "number") { f.min = "0"; f.step = String(step); }
+        if (key === "description") { f.maxLength = 160; f.placeholder = "facultatif"; }
+        f.setAttribute("aria-label", title);
+        return el("td", {}, f);
+      }), el("td", {}, Object.assign(el("button", { textContent: "Retirer" }), {
+        onclick: () => { if (arr.length <= minRows) return show(`Il faut garder au moins ${minRows} ligne.`, true); arr.splice(i, 1); draw(); },
+      }))));
+      const add = el("button", { textContent: addLabel });
+      add.onclick = () => { arr.push(blank()); draw(); };
+      wrap.replaceChildren(el("div", { className: "tablewrap" }, el("table", { className: "list" }, el("thead", {}, head), el("tbody", {}, ...rows))), add);
+    };
+    draw();
+    return wrap;
+  }
+  const addonCols = [["name", "Option", "text"], ["price", "Prix (DA)"], ["description", "Description pour le client", "text"]];
+  const newAddon = () => ({ name: "", price: 0, description: "" });
+  function renderOther() {
+    const { product: p, video: v, editing: e, ad } = other;
+    const block = (title, ...kids) => el("div", { className: "otherblock" }, el("h3", { textContent: title }), ...kids);
+    const fmt = input(v.formatsText, "", (x) => (v.formatsText = x)); fmt.placeholder = "9:16, 16:9";
+    $("otherForm").replaceChildren(
+      block("Shooting produit",
+        enabledBox(p, "Proposé aux clients"),
+        el("p", { className: "mute small", textContent: "Packs : nombre de produits, photos par produit et prix du pack." }),
+        listEditor(p.packages, [["name", "Nom du pack", "text"], ["products", "Produits", "number", 1], ["photosPerProduct", "Photos / produit", "number", 1], ["price", "Prix (DA)"]],
+          () => ({ name: "", products: 1, photosPerProduct: 3, price: 0 }), "+ Ajouter un pack"),
+        el("div", { className: "grid3" }, numField("Photo supplémentaire (DA)", p, "extraPhotoPrice"), numField("Prix minimum (DA)", p, "minPrice")),
+        el("p", { className: "mute small", textContent: "Options à cocher (prix ajouté une fois) :" }),
+        listEditor(p.addons, addonCols, newAddon, "+ Ajouter une option")),
+      block("Vidéo (reels)",
+        enabledBox(v, "Proposé aux clients"),
+        el("div", { className: "grid3" }, numField("Prix d'une vidéo (DA)", v, "pricePerReel"), numField("Vidéos max par demande", v, "maxReels", 1, 1), numField("Prix minimum (DA)", v, "minPrice")),
+        el("label", {}, "Formats proposés (séparés par des virgules)", fmt),
+        el("p", { className: "mute small", textContent: "Remise selon la quantité : à partir de N vidéos, X % de remise." }),
+        listEditor(v.volumeTiers, [["minQty", "À partir de (vidéos)", "number", 1], ["percent", "Remise (%)", "number", 1]], () => ({ minQty: 2, percent: 5 }), "+ Ajouter une remise"),
+        el("p", { className: "mute small", textContent: "Options à cocher (prix ajouté une fois) :" }),
+        listEditor(v.addons, addonCols, newAddon, "+ Ajouter une option")),
+      block("Montage",
+        enabledBox(e, "Proposé aux clients"),
+        el("p", { className: "mute small", textContent: "Prix selon la durée de la vidéo finale (60 s = 1 min, 180 s = 3 min…)." }),
+        listEditor(e.durationTiers, [["maxSeconds", "Jusqu'à (secondes)", "number", 15], ["price", "Prix (DA)"]], () => ({ maxSeconds: 60, price: 0 }), "+ Ajouter une durée", 1),
+        el("div", { className: "grid3" },
+          numField("Sous-titres (DA)", e, "subtitlesPrice"), numField("Révisions incluses", e, "includedRevisions", 1),
+          numField("Révision en plus (DA)", e, "extraRevisionPrice"), numField("Vidéos max par demande", e, "maxVideos", 1, 1), numField("Prix minimum (DA)", e, "minPrice"))),
+      block("Pub",
+        enabledBox(ad, "Proposé aux clients"),
+        el("p", { className: "mute small", textContent: "Toujours sur devis : le client décrit son projet et vous fixez le prix dans « Demandes des clients »." })),
+    );
+  }
+  /** Ids stables (gardés s'ils existent, sinon tirés du nom) et champs vides retirés. */
+  function withIds(list, fallback, clean = (x) => x) {
+    const ids = new Set();
+    return list.map((x) => {
+      let id = /^[A-Za-z0-9_-]{1,40}$/.test(x.id || "") && !ids.has(x.id) ? x.id : "";
+      if (!id) { const base = slugify(x.name) || fallback; id = base; for (let n = 2; ids.has(id); n++) id = `${base}-${n}`; }
+      ids.add(id);
+      return { ...clean(x), id };
+    });
+  }
+  const cleanAddon = (a) => ({ name: String(a.name || "").trim(), price: a.price, ...(String(a.description || "").trim() ? { description: String(a.description).trim() } : {}) });
+  const cleanPack = (k) => ({ name: String(k.name || "").trim(), products: k.products, photosPerProduct: k.photosPerProduct, price: k.price });
+
+  /** Catalogue complet à partir des deux formulaires (studio + autres tarifs). */
+  function buildCatalog() {
     const payload = { ...grid, minMinutes: Number($("minMinutes").value), stepMinutes: Number($("stepMinutes").value), bufferMinutes: Number($("bufferMinutes").value), minPrice: Number($("minPrice").value) };
     const studio = studioFromGrid(payload, currentCatalog.studio);
+    const o = JSON.parse(JSON.stringify(other));
+    o.product.packages = withIds(o.product.packages, "pack", cleanPack);
+    o.product.addons = withIds(o.product.addons, "option", cleanAddon);
+    o.video.addons = withIds(o.video.addons, "option", cleanAddon);
+    o.video.formats = String(o.video.formatsText || "").split(",").map((s) => s.trim()).filter(Boolean);
+    delete o.video.formatsText;
+    o.video.volumeTiers.sort((a, b) => a.minQty - b.minQty);
+    o.editing.durationTiers.sort((a, b) => a.maxSeconds - b.maxSeconds);
     const t = utcMsToAlgiers(Date.now());
-    const version = `studio-${t.date}-${t.hm}-${Date.now() % 100000}`;
-    const v = await publish({ ...currentCatalog, version, provisional: $("provisional").checked, studio });
+    return { ...currentCatalog, ...o, studio, version: `tarifs-${t.date}-${t.hm}-${Date.now() % 100000}`, provisional: $("provisional").checked };
+  }
+  async function publishAll() {
+    const v = await publish(buildCatalog());
     show("Nouveaux tarifs en vigueur (version " + v + "). Les demandes déjà envoyées gardent leur prix.");
     await loadCatalog();
-  });
+  }
+  $("publishOther").onclick = (e) => busy(e.target, publishAll);
+  $("resetOther").onclick = () => { other = otherFromCatalog(currentCatalog); renderOther(); show("Modifications annulées."); };
 
   async function loadCatalog() {
     const snap = await getDoc(doc(db, "publicSettings", "catalog"));
     if (!snap.exists()) {
       $("catalogInfo").textContent = "Aucun tarif publié : le site client ne peut pas encore calculer de prix.";
-      $("seedCatalog").hidden = false; $("ratesPanel").hidden = true;
+      $("seedCatalog").hidden = false; $("ratesPanel").hidden = true; $("otherPanel").hidden = true;
       return;
     }
     currentCatalog = snap.data().catalog;
@@ -581,7 +700,9 @@
     grid = gridFromStudio(currentCatalog.studio);
     $("provisional").checked = !!currentCatalog.provisional;
     renderGrid();
-    $("ratesPanel").hidden = false;
+    other = otherFromCatalog(currentCatalog);
+    renderOther();
+    $("ratesPanel").hidden = false; $("otherPanel").hidden = false;
   }
 
   // ---------- Sauvegarde ----------
@@ -597,7 +718,7 @@
 
   // ---------- Affichage selon le rôle ----------
   async function render(user) {
-    for (const id of ["signedIn", "ordersPanel", "paymentsPanel", "adminPanel", "ratesPanel", "bootstrap", "join", "verifyInfo", "noAccess"]) $(id).hidden = true;
+    for (const id of ["signedIn", "ordersPanel", "paymentsPanel", "adminPanel", "ratesPanel", "otherPanel", "bootstrap", "join", "verifyInfo", "noAccess"]) $(id).hidden = true;
     $("signedOut").hidden = !!user;
     me = null;
     if (!user) return;

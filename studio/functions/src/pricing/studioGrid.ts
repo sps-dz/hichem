@@ -112,12 +112,18 @@ export function studioFromGrid(gridIn: unknown, base: StudioConfig): StudioConfi
     if (typeof v !== "number" || !Number.isSafeInteger(v)) invalid(`${field} invalide.`);
     return v;
   };
+  const minMinutes = int(g.minMinutes, "Durée minimale");
+  const stepMinutes = int(g.stepMinutes, "Pas de réservation");
+  // Une durée réservable est toujours un multiple du pas : sinon le client ne peut choisir aucune heure.
+  if (stepMinutes > 0 && minMinutes % stepMinutes !== 0) {
+    invalid(`La durée minimale (${minMinutes} min) doit être un multiple du pas de réservation (${stepMinutes} min), par exemple ${Math.ceil(minMinutes / stepMinutes) * stepMinutes} min.`);
+  }
   return {
     enabled: base.enabled,
     openingHours,
     periods,
-    minMinutes: int(g.minMinutes, "Durée minimale"),
-    stepMinutes: int(g.stepMinutes, "Pas de réservation"),
+    minMinutes,
+    stepMinutes,
     bufferMinutes: int(g.bufferMinutes, "Temps entre deux réservations"),
     specialDates: base.specialDates,
     addons,

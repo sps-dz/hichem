@@ -138,6 +138,7 @@ test("grille d'administration : jour fermé, nouvelle tranche, options, et refus
   bad((x) => (x.bands[2] = { from: "18:00", to: "22:00" }), /trou/);
   bad((x) => (x.bands[0] = { from: "12:00", to: "08:00" }), /fin doit être après/);
   bad((x) => x.rates.pop(), /7 jours/);
+  bad((x) => { x.minMinutes = 45; x.stepMinutes = 30; }, /multiple du pas/);
   bad((x) => (x.rates[0] = [1500, 2000]), /une case par tranche/);
   bad((x) => (x.addons = [{ name: "", price: 800 }]), /nom manquant/);
   bad((x) => (x.addons = [{ name: "iPhone", price: 800.5 }]), /entier/);

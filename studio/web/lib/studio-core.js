@@ -742,12 +742,17 @@ function studioFromGrid(gridIn, base) {
     if (typeof v !== "number" || !Number.isSafeInteger(v)) invalid(`${field} invalide.`);
     return v;
   };
+  const minMinutes = int(g.minMinutes, "Dur\xE9e minimale");
+  const stepMinutes = int(g.stepMinutes, "Pas de r\xE9servation");
+  if (stepMinutes > 0 && minMinutes % stepMinutes !== 0) {
+    invalid(`La dur\xE9e minimale (${minMinutes} min) doit \xEAtre un multiple du pas de r\xE9servation (${stepMinutes} min), par exemple ${Math.ceil(minMinutes / stepMinutes) * stepMinutes} min.`);
+  }
   return {
     enabled: base.enabled,
     openingHours,
     periods,
-    minMinutes: int(g.minMinutes, "Dur\xE9e minimale"),
-    stepMinutes: int(g.stepMinutes, "Pas de r\xE9servation"),
+    minMinutes,
+    stepMinutes,
     bufferMinutes: int(g.bufferMinutes, "Temps entre deux r\xE9servations"),
     specialDates: base.specialDates,
     addons: addons2,

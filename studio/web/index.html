@@ -39,6 +39,7 @@
           <p class="daytitle" id="sDayTitle">Choisissez un jour</p>
           <p class="mute small" id="sHours"></p>
           <div class="hours" id="sSlots"></div>
+          <p class="msg bad" id="sSlotMsg" hidden></p>
           <div class="legend" id="sSlotLegend" hidden>
             <span><i class="dot free"></i>Libre</span>
             <span><i class="dot sel"></i>Votre choix</span>
@@ -193,13 +194,15 @@
   const minToHm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
   const hhmm = (m) => minToHm(m).replace(":", "");
   const ymd = (y, mo, d) => new Date(Date.UTC(y, mo, d)).toISOString().slice(0, 10);
-  const durLabel = (m) => (m % 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m / 60} h`);
+  const durLabel = (m) => (m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m / 60} h`);
   const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
   const WEEKDAYS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
   const WEEKDAYS_LONG = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
   const MONTHS_AHEAD = 6;
 
   const sel = { date: "", start: null, end: null, waitingEnd: false };
+  const minSpan = () => { const st = catalog.studio; return Math.ceil(st.minMinutes / st.stepMinutes) * st.stepMinutes; };
+  const slotMsg = (text) => { $("sSlotMsg").textContent = text || ""; $("sSlotMsg").hidden = !text; };
   let calMonth = null; // { y, m }
   const loadedMonths = new Set();
 
@@ -226,7 +229,7 @@
     const nowMin = date === today() ? now.getUTCHours() * 60 + now.getUTCMinutes() : date < today() ? Infinity : -1;
     const blocks = [];
     for (let m = hmToMin(hours.open); m + st.stepMinutes <= hmToMin(hours.close); m += st.stepMinutes) {
-      blocks.push({ m, state: m < nowMin ? "past" : busy.has(hhmm(m)) ? "busy" : "free" });
+      blocks.push({ m, state: m <= nowMin ? "past" : busy.has(hhmm(m)) ? "busy" : "free" });
     }
     return { hours, blocks };
   }
@@ -239,11 +242,11 @@
     if (date < today()) return "past";
     const day = dayBlocks(date);
     if (!day) return "closed";
-    const st = catalog.studio;
-    const need = Math.ceil(st.minMinutes / st.stepMinutes);
+    const need = minSpan() / catalog.studio.stepMinutes;
     let run = 0, best = 0;
     for (const b of day.blocks) { run = b.state === "free" ? run + 1 : 0; best = Math.max(best, run); }
-    if (best < need) return "full";
+    // Plus rien de libre aujourd'hui uniquement parce que l'heure est passée : gris, pas rouge.
+    if (best < need) return day.blocks.some((b) => b.state === "busy") ? "full" : "past";
     return day.blocks.some((b) => b.state === "busy") ? "part" : "free";
   }
 
@@ -285,7 +288,7 @@
 
   function pickDay(date) {
     sel.date = date; sel.start = sel.end = null; sel.waitingEnd = false;
-    show("");
+    slotMsg("");
     renderCalendar();
     renderSlots();
   }
@@ -299,7 +302,7 @@
     const day = dayBlocks(sel.date);
     if (!day) { $("sHours").textContent = "Le studio est fermé ce jour-là."; box.replaceChildren(); refreshStudioPrice(); return; }
     const st = catalog.studio;
-    $("sHours").textContent = `Ouvert de ${day.hours.open} à ${day.hours.close} · minimum ${durLabel(st.minMinutes)}. Les cases rouges sont déjà réservées.`;
+    $("sHours").textContent = `Ouvert de ${day.hours.open} à ${day.hours.close} · minimum ${durLabel(minSpan())}. Les cases rouges sont déjà réservées.`;
     box.replaceChildren(...day.blocks.map((b) => {
       const chosen = sel.start !== null && b.m >= sel.start && b.m < sel.end;
       const chip = el("button", { type: "button", className: `slot ${b.state}` + (chosen ? " on" : ""), textContent: `${minToHm(b.m)} – ${minToHm(b.m + st.stepMinutes)}` });
@@ -316,18 +319,18 @@
   // début le déplace ; un nouveau toucher après une sélection complète recommence.
   function pickBlock(m, blocks) {
     const st = catalog.studio;
-    show("");
+    slotMsg("");
     if (sel.start !== null && sel.waitingEnd) {
       if (m >= sel.start) {
-        const end = Math.max(m + st.stepMinutes, sel.start + st.minMinutes);
+        const end = Math.max(m + st.stepMinutes, sel.start + minSpan());
         if (isFreeRange(blocks, sel.start, end)) { sel.end = end; sel.waitingEnd = false; return renderSlots(); }
-        return show("Une partie de ces heures est déjà réservée : choisissez une fin plus tôt ou un autre début.", true);
+        return slotMsg("Une partie de ces heures est déjà réservée : choisissez une fin plus tôt ou un autre début.", true);
       }
       if (isFreeRange(blocks, m, sel.end)) { sel.start = m; sel.waitingEnd = false; return renderSlots(); }
     }
-    const end = m + st.minMinutes;
+    const end = m + minSpan();
     if (!isFreeRange(blocks, m, end)) {
-      return show(`Il faut au moins ${durLabel(st.minMinutes)} de libre à partir de ${minToHm(m)}. Choisissez une autre heure de début.`, true);
+      return slotMsg(`Il faut au moins ${durLabel(minSpan())} de libre à partir de ${minToHm(m)}. Choisissez une autre heure de début.`, true);
     }
     sel.start = m; sel.end = end; sel.waitingEnd = true;
     renderSlots();
