@@ -1,4 +1,4 @@
-# Plateforme studio — phase 2 : base de données et comptes
+# Plateforme studio — phases 2 et 3 : base, comptes, catalogue et prix
 
 Projet Firebase séparé du CRM. Cette phase pose les fondations : la base, les
 règles d'accès, les comptes de l'équipe, le blocage des créneaux sans
@@ -23,6 +23,59 @@ client, les commandes et les paiements viennent dans les phases suivantes.
 | `web/admin/index.html` | Page « Équipe » pour devenir admin et gérer les comptes |
 | `tests/rules/` | Tests des règles, à lancer sur l'émulateur Firebase officiel |
 | `../.github/workflows/studio-tests.yml` | Lance tous les tests sur GitHub à chaque envoi qui touche `studio/` |
+
+## Phase 3 : catalogue et moteur de prix
+
+Le prix est toujours calculé par le serveur (`functions/src/pricing/engine.ts`), en
+dinars entiers : prix de chaque ligne → sous-total → meilleure remise (une seule,
+sans cumul, jamais sous le prix minimum) → total → acompte 20 % → reste. Le
+résultat complet sert d'instantané figé dans la commande (phase 6).
+
+| Fichier | Rôle |
+| --- | --- |
+| `functions/src/pricing/catalog.ts` | Structure du catalogue, vérification avant publication, tarifs provisoires |
+| `functions/src/pricing/engine.ts` | Calcul de chaque service, des remises et des totaux |
+| `functions/src/pricing/studioGrid.ts` | Grille jours × tranches de la page d'administration ↔ catalogue |
+| `functions/src/catalogAdmin.ts` | Publication versionnée du catalogue (admin), grille du studio et calcul public `pricingQuote` |
+
+### Tarifs provisoires (moyenne du marché, à ajuster)
+
+| Service | Tarif |
+| --- | --- |
+| Location studio | Forfait par tranche selon le jour (grille ci-dessous), réservation de 1 h minimum par pas de 30 min, tous les jours 8 h – 22 h |
+| Option studio | iPhone 15 Pro Max : +800 DA par réservation |
+| Shooting produit | Pack 5 produits 12 000 DA · 10 produits 22 000 DA · 20 produits 40 000 DA (3 photos par produit) ; photo en plus 1 000 DA |
+| Shooting vidéo | 8 000 DA par vidéo (9:16 ou 16:9) ; −10 % dès 3 vidéos, −15 % dès 5 |
+| Montage vidéo | Jusqu'à 1 min 3 500 DA · 3 min 6 000 DA · 10 min 12 000 DA ; sous-titres +1 500 DA ; 2 révisions incluses, puis 1 000 DA |
+| Production publicitaire | Sur devis |
+| Remises de combinaison | Aucune pour l'instant (le moteur les gère dès qu'elles sont créées) |
+
+Grille de location du studio (fixée par l'admin le 25/11/2026, forfait de chaque tranche) :
+
+| Jour | 08h–12h | 12h–17h | 17h–22h |
+| --- | --- | --- | --- |
+| Dimanche à mercredi | 1 500 DA | 2 000 DA | 2 500 DA |
+| Jeudi | 2 000 DA | 2 000 DA | 3 000 DA |
+| Vendredi et samedi | 2 500 DA | 3 000 DA | 3 500 DA |
+
+Chaque tranche touchée par la réservation est due en entier, même utilisée en partie :
+dimanche 9h → 11h = 1 500 DA ; 11h30 → 12h30 = 1 500 + 2 000 = 3 500 DA ;
+lundi 16h → 18h = 2 000 + 2 500 = 4 500 DA ; journée 8h → 22h = 6 000 DA.
+Les dates spéciales « tarif du jour » remplacent le forfait de chaque tranche ; les
+majorations ou remises en % s'appliquent à chaque forfait.
+
+**Modifier les tarifs sans toucher au code** : page Équipe → « Tarifs du studio ».
+On y change chaque case du tableau, les heures des tranches (ajout / retrait), les
+options et leurs prix, la durée minimale, le pas, le temps entre deux réservations
+et le prix minimum, puis « Publier les nouveaux tarifs ». Le serveur vérifie la
+grille, publie une nouvelle version datée et journalisée ; les commandes déjà
+passées gardent leur prix.
+
+Repères utilisés pour les autres services : 3 000 – 6 000 DA/h pour un studio et 500 – 1 500 DA par photo produit
+(JOBSdz, 2026), reels à partir de 5 000 DA chez les créateurs (Profilia), montage
+à partir de 3 500 DA par publication (Helpyotek).
+
+Après le déploiement : page Équipe → « Publier les tarifs provisoires ».
 
 ## Rôles proposés (à valider)
 
@@ -86,7 +139,7 @@ immédiatement.
 ## Tests
 
 ```sh
-cd functions && npm test            # 29 tests : chevauchement, concurrence, rôles, audit, argent
+cd functions && npm test            # 51 tests : chevauchement, concurrence, rôles, audit, argent, prix
 cd tests/rules && npm ci && npm run test:emulator   # règles, avec Java 21 installé
 ```
 

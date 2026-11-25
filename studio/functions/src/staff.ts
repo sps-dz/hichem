@@ -82,7 +82,7 @@ function cleanUid(v: unknown): string {
  * le rôle vient de changer, est refusé tout de suite, même si son jeton (valable
  * 1 h) dit encore « admin ».
  */
-async function requireActiveRole(deps: Deps, callerIn: Caller | null, roles: readonly Role[]): Promise<Caller & { role: Role }> {
+export async function requireActiveRole(deps: Deps, callerIn: Caller | null, roles: readonly Role[]): Promise<Caller & { role: Role }> {
   const caller = requireRole(callerIn, roles);
   const snap = await deps.db.collection(STAFF).doc(caller.uid).get();
   const s = snap.exists ? (snap.data() as StaffDoc) : null;

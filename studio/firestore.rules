@@ -89,6 +89,7 @@ service cloud.firestore {
     match /promotionUsages/{id}  { allow read: if isAdmin(); allow write: if false; }
     match /counters/{id}         { allow read: if isAdmin(); allow write: if false; }
     match /systemJobs/{id}       { allow read: if isAdmin(); allow write: if false; }
+    match /catalogVersions/{id}  { allow read: if isAdmin(); allow write: if false; }
 
     // Liens privés des clients : jamais lisibles depuis un navigateur, même par
     // l'admin. Seules les fonctions les vérifient.

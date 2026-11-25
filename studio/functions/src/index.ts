@@ -1,11 +1,17 @@
 /**
- * Point d'entrée des Cloud Functions du studio (phase 2).
+ * Point d'entrée des Cloud Functions du studio (phases 2 et 3).
  *
  * Appelables (depuis le tableau de bord, connecté) :
  *   staffBootstrapAdmin  — le premier admin (e-mail vérifié listé dans ADMIN_EMAILS)
  *   staffCreate          — l'admin crée un compte employé / comptable / admin
  *   staffSetRole         — l'admin change un rôle
  *   staffSetDisabled     — l'admin désactive ou réactive un compte
+ *   catalogSeedDefaults  — l'admin publie les tarifs provisoires (premier démarrage)
+ *   catalogPublish       — l'admin publie une nouvelle version du catalogue
+ *   catalogUpdateStudioRates — l'admin modifie la grille de tarifs du studio
+ *
+ * Appelable publique (site client, sans connexion) :
+ *   pricingQuote         — calcule le prix d'un panier sur le serveur
  *
  * Planifiées :
  *   releaseExpiredSlotHolds — toutes les 5 min, libère les blocages de 60 min expirés
@@ -27,6 +33,7 @@ import { releaseExpiredHolds } from "./lib/slots";
 import { STUDIO_TZ } from "./lib/time";
 import { AuthPort, Deps, parseEmailList, bootstrapAdmin, createStaff, setStaffDisabled, setStaffRole } from "./staff";
 import { runDailyBackup } from "./backup";
+import { publishCatalog, quote, seedDefaultCatalog, updateStudioRates } from "./catalogAdmin";
 
 initializeApp();
 const db = getFirestore();
@@ -76,6 +83,22 @@ export const staffSetRole = onCall(callOpts, (req) =>
 
 export const staffSetDisabled = onCall(callOpts, (req) =>
   toHttps("staffSetDisabled", () => setStaffDisabled(deps, callerFromToken(req.auth), (req.data ?? {}) as Record<string, unknown>)),
+);
+
+export const catalogSeedDefaults = onCall(callOpts, (req) =>
+  toHttps("catalogSeedDefaults", () => seedDefaultCatalog(deps, callerFromToken(req.auth))),
+);
+
+export const catalogPublish = onCall(callOpts, (req) =>
+  toHttps("catalogPublish", () => publishCatalog(deps, callerFromToken(req.auth), (req.data ?? {}) as Record<string, unknown>)),
+);
+
+export const catalogUpdateStudioRates = onCall(callOpts, (req) =>
+  toHttps("catalogUpdateStudioRates", () => updateStudioRates(deps, callerFromToken(req.auth), (req.data ?? {}) as Record<string, unknown>)),
+);
+
+export const pricingQuote = onCall({ ...callOpts, maxInstances: 20 }, (req) =>
+  toHttps("pricingQuote", () => quote(db, (req.data ?? {}) as Record<string, unknown>, Timestamp.now())),
 );
 
 export const releaseExpiredSlotHolds = onSchedule({ schedule: "every 5 minutes", timeZone: STUDIO_TZ }, async () => {

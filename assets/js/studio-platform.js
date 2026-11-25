@@ -28,8 +28,8 @@
   var PHASES = [
     ['Audit et architecture', 'done'],
     ['Base de données et comptes', 'done'],
-    ['Catalogue et moteur de prix', 'next'],
-    ['Site client et configurateur', ''],
+    ['Catalogue et moteur de prix', 'done'],
+    ['Site client et configurateur', 'next'],
     ['Panier et promotions', ''],
     ['Réservations et disponibilités', ''],
     ['WhatsApp et notifications', ''],
@@ -90,11 +90,11 @@
       '<p class="text-xs text-gray-500 mt-1">Réservations, prix et paiements du studio en ligne. Sa base de données est séparée et protégée : rien ici ne modifie les données du CRM.</p></div>' +
       '<div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">' +
         X.kpi('Phases livrées', done + ' / ' + PHASES.length, 'text-indigo-600', 'fa-list-check') +
-        X.kpi('Prochaine étape', 'Prix', '', 'fa-tags') +
+        X.kpi('Prochaine étape', 'Site client', '', 'fa-mobile-screen') +
         X.kpi('Mise en ligne', 'Projet Firebase à créer', 'text-amber-600', 'fa-cloud') +
       '</div>' +
-      X.card('Espace Équipe', 'fa-users-gear',
-        '<p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Devenir administrateur de la plateforme, créer les comptes employé et comptable, changer un rôle ou désactiver un compte. Connexion avec votre compte Google.</p>' +
+      X.card('Espace Équipe et tarifs', 'fa-users-gear',
+        '<p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Devenir administrateur, gérer les comptes de l\'équipe et <b>modifier les tarifs du studio</b> (forfait par jour et par tranche, options). Connexion avec votre compte Google.</p>' +
         '<div class="flex flex-wrap gap-2">' + X.btn('Ouvrir dans un nouvel onglet', 'stpOpen()', null, 'fa-arrow-up-right-from-square') +
         X.btn('Afficher ici', 'stpToggleFrame()', 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-100', 'fa-window-maximize') + '</div>' +
         '<p class="text-[11px] text-gray-400 mt-2">Adresse : ' + E(url) + '</p>' +

@@ -27,6 +27,13 @@
   .msg { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg); white-space: pre-wrap; word-break: break-word; }
   .msg.bad { color: var(--bad); }
   .tablewrap { overflow-x: auto; }
+  .rates input { width: 92px; text-align: right; padding: 6px 8px; }
+  .rates input.hm { width: 76px; text-align: center; }
+  .rates th, .rates td { padding: 6px 4px; white-space: nowrap; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 640px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .optrow { display: grid; grid-template-columns: 1fr 120px auto; gap: 8px; margin-bottom: 8px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -67,11 +74,45 @@
       </label>
       <button class="primary" id="create">Créer</button>
     </div>
+    <h2 style="margin-top:20px">Tarifs</h2>
+    <p class="mute" id="catalogInfo">Chargement…</p>
+    <button id="seedCatalog" hidden>Publier les tarifs provisoires</button>
     <h2 style="margin-top:20px">Équipe</h2>
     <div class="tablewrap"><table>
       <thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>État</th><th></th></tr></thead>
       <tbody id="staffRows"></tbody>
     </table></div>
+  </section>
+
+  <section id="ratesPanel" hidden>
+    <h2>Tarifs du studio</h2>
+    <p class="mute"><b>Forfait de la tranche</b> selon le jour. Une case vide = fermé sur cette tranche (seulement en début ou en fin de journée). Chaque tranche touchée par une réservation est due en entier, même si elle n'est utilisée qu'en partie : 11h30 → 12h30 un dimanche = forfait du matin + forfait de l'après-midi ; 9h → 11h = forfait du matin seul.</p>
+    <div class="tablewrap"><table class="rates">
+      <thead id="ratesHead"></thead>
+      <tbody id="ratesBody"></tbody>
+    </table></div>
+    <div class="actions">
+      <button id="addBand">+ Ajouter une tranche</button>
+      <button id="removeBand">− Retirer la dernière tranche</button>
+    </div>
+
+    <h2 style="margin-top:20px">Options par réservation</h2>
+    <p class="mute">Ajoutées une seule fois au prix de la réservation, quelle que soit sa durée.</p>
+    <div id="optRows"></div>
+    <button id="addOpt">+ Ajouter une option</button>
+
+    <h2 style="margin-top:20px">Règles de réservation</h2>
+    <div class="grid4">
+      <label>Durée minimale (min)<input id="minMinutes" type="number" min="5" step="5"></label>
+      <label>Pas de réservation (min)<input id="stepMinutes" type="number" min="5" step="5"></label>
+      <label>Temps entre deux réservations (min)<input id="bufferMinutes" type="number" min="0" step="5"></label>
+      <label>Prix minimum (DA)<input id="minPrice" type="number" min="0" step="100"></label>
+    </div>
+    <label style="display:flex; gap:8px; align-items:center; margin-top:12px; color:var(--ink)"><input id="provisional" type="checkbox" style="width:auto"> Tarifs provisoires</label>
+    <div class="actions">
+      <button class="primary" id="publishRates">Publier les nouveaux tarifs</button>
+      <button id="resetRates">Annuler mes modifications</button>
+    </div>
   </section>
 
   <div id="msg" class="msg" hidden></div>
@@ -80,16 +121,18 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
-  import { getFirestore, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+  import { getFirestore, collection, getDocs, orderBy, query, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
   import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js";
 
   // À remplir avec la configuration du projet Firebase du studio
   // (Console Firebase → Paramètres du projet → Vos applications → Application Web).
   const firebaseConfig = {
-    apiKey: "REMPLACER",
-    authDomain: "REMPLACER.firebaseapp.com",
-    projectId: "REMPLACER",
-    appId: "REMPLACER",
+    apiKey: "AIzaSyBIrjOoXsXqJh5_Dh2LrfFfT-132VFFW5I",
+    authDomain: "sponsorhichem.firebaseapp.com",
+    projectId: "sponsorhichem",
+    storageBucket: "sponsorhichem.firebasestorage.app",
+    messagingSenderId: "499965988228",
+    appId: "1:499965988228:web:21f6a573fd08767e5c61d1",
   };
 
   const $ = (id) => document.getElementById(id);
@@ -139,6 +182,123 @@
     await loadStaff();
   });
 
+  // ---------- Grille de tarifs du studio ----------
+  const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+  const toMin = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+  let grid = null;      // état édité
+  let loadedStudio = null;
+
+  function gridFromStudio(st) {
+    const keys = [...new Set(st.periods.map((p) => p.from + "-" + p.to))].sort((a, b) => toMin(a) - toMin(b));
+    const bands = keys.map((k) => ({ from: k.slice(0, 5), to: k.slice(6, 11) }));
+    const rates = DAYS.map((_, d) => bands.map((b) => {
+      const p = st.periods.find((x) => x.from === b.from && x.to === b.to && x.days.includes(d));
+      return p ? p.price : null;
+    }));
+    return {
+      bands, rates,
+      addons: (st.addons || []).map((a) => ({ id: a.id, name: a.name, price: a.price })),
+      minMinutes: st.minMinutes, stepMinutes: st.stepMinutes, bufferMinutes: st.bufferMinutes, minPrice: st.minPrice,
+    };
+  }
+
+  function input(value, cls, onInput, type = "text") {
+    const i = document.createElement("input");
+    i.type = type;
+    if (cls) i.className = cls;
+    i.value = value == null ? "" : String(value);
+    i.oninput = () => onInput(i.value);
+    return i;
+  }
+
+  function renderGrid() {
+    const head = $("ratesHead"), body = $("ratesBody");
+    head.replaceChildren(); body.replaceChildren();
+    const hr = document.createElement("tr");
+    const th0 = document.createElement("th"); th0.textContent = "Jour"; hr.append(th0);
+    grid.bands.forEach((b, i) => {
+      const th = document.createElement("th");
+      th.append(input(b.from, "hm", (v) => (grid.bands[i].from = v)), document.createTextNode(" – "), input(b.to, "hm", (v) => (grid.bands[i].to = v)));
+      hr.append(th);
+    });
+    head.append(hr);
+    DAYS.forEach((name, d) => {
+      const tr = document.createElement("tr");
+      const td0 = document.createElement("td"); td0.textContent = name; tr.append(td0);
+      grid.bands.forEach((_, b) => {
+        const td = document.createElement("td");
+        const i = input(grid.rates[d][b], "", (v) => (grid.rates[d][b] = v.trim() === "" ? null : Number(v)), "number");
+        i.min = "0"; i.step = "100"; i.placeholder = "fermé";
+        i.setAttribute("aria-label", name + " " + grid.bands[b].from + "–" + grid.bands[b].to + " (forfait en DA)");
+        td.append(i, document.createTextNode(" DA"));
+        tr.append(td);
+      });
+      body.append(tr);
+    });
+    const rows = $("optRows");
+    rows.replaceChildren();
+    grid.addons.forEach((a, i) => {
+      const r = document.createElement("div"); r.className = "optrow";
+      const n = input(a.name, "", (v) => (grid.addons[i].name = v)); n.placeholder = "Nom de l'option"; n.setAttribute("aria-label", "Nom de l'option");
+      const p = input(a.price, "", (v) => (grid.addons[i].price = Number(v)), "number"); p.min = "0"; p.step = "100"; p.setAttribute("aria-label", "Prix de l'option en DA");
+      const del = document.createElement("button"); del.textContent = "Retirer";
+      del.onclick = () => { grid.addons.splice(i, 1); renderGrid(); };
+      r.append(n, p, del); rows.append(r);
+    });
+    $("minMinutes").value = grid.minMinutes; $("stepMinutes").value = grid.stepMinutes;
+    $("bufferMinutes").value = grid.bufferMinutes; $("minPrice").value = grid.minPrice;
+  }
+
+  $("addBand").onclick = () => {
+    const last = grid.bands[grid.bands.length - 1];
+    const from = last ? last.to : "08:00";
+    const h = Math.min(23, Number(from.slice(0, 2)) + 2);
+    grid.bands.push({ from, to: String(h).padStart(2, "0") + ":" + (h === 23 ? "59" : "00") });
+    grid.rates.forEach((row) => row.push(null));
+    renderGrid();
+  };
+  $("removeBand").onclick = () => {
+    if (grid.bands.length <= 1) return show("Il faut garder au moins une tranche.", true);
+    grid.bands.pop(); grid.rates.forEach((row) => row.pop()); renderGrid();
+  };
+  $("addOpt").onclick = () => { grid.addons.push({ name: "", price: 0 }); renderGrid(); };
+  $("resetRates").onclick = () => { grid = gridFromStudio(loadedStudio); renderGrid(); show("Modifications annulées."); };
+  $("publishRates").onclick = (e) => busy(e.target, async () => {
+    const payload = {
+      ...grid,
+      minMinutes: Number($("minMinutes").value),
+      stepMinutes: Number($("stepMinutes").value),
+      bufferMinutes: Number($("bufferMinutes").value),
+      minPrice: Number($("minPrice").value),
+    };
+    const r = await call("catalogUpdateStudioRates", { grid: payload, provisional: $("provisional").checked });
+    show("Nouveaux tarifs en vigueur (version " + r.version + "). Les commandes déjà passées gardent leur prix.");
+    await loadCatalog();
+  });
+
+  async function loadCatalog() {
+    const snap = await getDoc(doc(db, "publicSettings", "catalog"));
+    if (!snap.exists()) {
+      $("catalogInfo").textContent = "Aucun tarif publié : le site client ne peut pas encore calculer de prix.";
+      $("seedCatalog").hidden = false;
+      $("ratesPanel").hidden = true;
+      return;
+    }
+    const c = snap.data().catalog;
+    $("catalogInfo").textContent = "Version en vigueur : " + c.version + (c.provisional ? " (tarifs provisoires)" : "") + ".";
+    $("seedCatalog").hidden = true;
+    loadedStudio = c.studio;
+    grid = gridFromStudio(c.studio);
+    $("provisional").checked = !!c.provisional;
+    renderGrid();
+    $("ratesPanel").hidden = false;
+  }
+  $("seedCatalog").onclick = (e) => busy(e.target, async () => {
+    const r = await call("catalogSeedDefaults", {});
+    show("Tarifs provisoires publiés : " + r.version);
+    await loadCatalog();
+  });
+
   async function loadStaff() {
     const snap = await getDocs(query(collection(db, "staff"), orderBy("displayName")));
     const me = auth.currentUser?.uid;
@@ -171,6 +331,7 @@
     $("signedOut").hidden = !!user;
     $("signedIn").hidden = !user;
     $("adminPanel").hidden = true;
+    $("ratesPanel").hidden = true;
     if (!user) return;
     const token = await user.getIdTokenResult();
     const role = token.claims.role || null;
@@ -180,6 +341,7 @@
     if (role === "admin") {
       $("adminPanel").hidden = false;
       await loadStaff().catch(fail);
+      await loadCatalog().catch(fail);
     }
   }
   onAuthStateChanged(auth, (u) => render(u).catch(fail));
