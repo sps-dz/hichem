@@ -6,147 +6,172 @@
 <title>Studio — Réserver</title>
 <link rel="stylesheet" href="lib/studio.css">
 </head>
-<body>
+<body class="client">
 <main>
-  <h1 id="studioName">Studio</h1>
-  <p class="mute">Réservez le studio ou commandez un shooting. Le prix s'affiche tout de suite ; votre demande est confirmée dès que l'acompte est reçu.</p>
-  <p id="provisional" class="note" hidden>Tarifs provisoires : ils peuvent encore changer avant la confirmation.</p>
+  <header class="top">
+    <h1 id="studioName">Studio</h1>
+    <div class="langs" id="langs" role="group" aria-label="Langue / اللغة / Language"></div>
+  </header>
+  <p class="lead" data-i18n="intro">Louez le studio à l'heure ou confiez-nous vos photos et vidéos. Le prix s'affiche tout de suite, sans engagement.</p>
+  <div class="how">
+    <b data-i18n="howTitle"></b>
+    <ol>
+      <li data-i18n="how1"></li>
+      <li data-i18n="how2"></li>
+      <li data-i18n="how3"></li>
+    </ol>
+  </div>
+  <p id="provisional" class="note" hidden data-i18n="provisional"></p>
 
-  <div id="loading" class="msg">Chargement des tarifs…</div>
+  <div id="loading" class="msg" data-i18n="loading">Chargement des tarifs…</div>
 
   <div id="shop" hidden>
-    <nav class="tabs" role="tablist" id="tabs"></nav>
+    <h2 class="steph" data-i18n="chooseService"></h2>
+    <nav class="services" role="tablist" id="tabs"></nav>
 
     <!-- Location du studio -->
     <section data-tab="studio" hidden>
-      <h2>Location du studio</h2>
-      <p class="mute small" style="margin:-4px 0 12px"><b>1.</b> Choisissez un jour. <b>2.</b> Touchez l'heure de début, puis l'heure de fin.</p>
+      <h2 data-i18n="studioH"></h2>
+      <p class="desc" data-i18n="studioDesc"></p>
+      <p class="hint" data-i18n="studioSteps"></p>
       <div class="pickgrid">
         <div>
           <div class="calhead">
-            <button type="button" id="sPrev" aria-label="Mois précédent">‹</button>
+            <button type="button" id="sPrev" data-i18n-aria="prevMonth">‹</button>
             <b id="sMonth"></b>
-            <button type="button" id="sNext" aria-label="Mois suivant">›</button>
+            <button type="button" id="sNext" data-i18n-aria="nextMonth">›</button>
           </div>
           <div class="cal" id="sCal"></div>
           <div class="legend">
-            <span><i class="dot free"></i>Libre</span>
-            <span><i class="dot part"></i>En partie réservé</span>
-            <span><i class="dot full"></i>Complet</span>
+            <span><i class="dot free"></i><span data-i18n="legFree"></span></span>
+            <span><i class="dot part"></i><span data-i18n="legPart"></span></span>
+            <span><i class="dot full"></i><span data-i18n="legFull"></span></span>
           </div>
         </div>
         <div>
-          <p class="daytitle" id="sDayTitle">Choisissez un jour</p>
+          <p class="daytitle" id="sDayTitle"></p>
           <p class="mute small" id="sHours"></p>
           <div class="hours" id="sSlots"></div>
-          <p class="msg bad" id="sSlotMsg" hidden></p>
+          <p class="msg bad" id="sSlotMsg" role="alert" hidden></p>
           <div class="legend" id="sSlotLegend" hidden>
-            <span><i class="dot free"></i>Libre</span>
-            <span><i class="dot sel"></i>Votre choix</span>
-            <span><i class="dot full"></i>Déjà réservé</span>
+            <span><i class="dot free"></i><span data-i18n="legFree"></span></span>
+            <span><i class="dot sel"></i><span data-i18n="legSel"></span></span>
+            <span><i class="dot full"></i><span data-i18n="legBooked"></span></span>
           </div>
-          <p class="rangebox" id="sRange" hidden></p>
+          <p class="rangebox" id="sRange" aria-live="polite" hidden></p>
         </div>
       </div>
-      <h2 id="sOptTitle" style="margin-top:16px">Options</h2>
-      <p class="mute small" style="margin:-8px 0 0">Cochez ce que vous voulez : le prix se met à jour à chaque case.</p>
+      <h3 id="sOptTitle" data-i18n="optTitle"></h3>
+      <p class="hint" id="sOptHint" data-i18n="optHint"></p>
       <div id="sAddons" class="checks"></div>
-      <h2 style="margin-top:4px">Détail du prix</h2>
-      <div class="pricebox" id="sPrice"></div>
-      <button class="primary" id="sAdd">Ajouter au panier</button>
+      <h3 data-i18n="priceTitle"></h3>
+      <div class="pricebox" id="sPrice" aria-live="polite"></div>
+      <button class="primary big" id="sAdd" data-i18n="addCart"></button>
     </section>
 
     <!-- Shooting produit -->
     <section data-tab="product" hidden>
-      <h2>Shooting produit</h2>
+      <h2 data-i18n="productH"></h2>
+      <p class="desc" data-i18n="productDesc"></p>
       <div class="grid3">
-        <label>Pack<select id="pPack"></select></label>
-        <label>Photos en plus<input id="pExtra" type="number" min="0" max="500" value="0"></label>
+        <label><span data-i18n="pack"></span><select id="pPack"></select><span class="hint" id="pPackHint"></span></label>
+        <label><span data-i18n="extra"></span><input id="pExtra" type="number" inputmode="numeric" min="0" max="500" value="0"><span class="hint" id="pExtraHint"></span></label>
       </div>
       <div id="pAddons" class="checks"></div>
-      <div class="pricebox" id="pPrice"></div>
-      <button class="primary" id="pAdd">Ajouter au panier</button>
+      <h3 data-i18n="priceTitle"></h3>
+      <div class="pricebox" id="pPrice" aria-live="polite"></div>
+      <button class="primary big" id="pAdd" data-i18n="addCart"></button>
     </section>
 
     <!-- Vidéo -->
     <section data-tab="video" hidden>
-      <h2>Shooting vidéo</h2>
+      <h2 data-i18n="videoH"></h2>
+      <p class="desc" data-i18n="videoDesc"></p>
       <div class="grid3">
-        <label>Nombre de vidéos<input id="vReels" type="number" min="1" value="1"></label>
-        <label>Format<select id="vFormat"></select></label>
+        <label><span data-i18n="videoCount"></span><input id="vReels" type="number" inputmode="numeric" min="1" value="1"><span class="hint" id="vTiers"></span></label>
+        <label><span data-i18n="videoFormat"></span><select id="vFormat"></select><span class="hint" data-i18n="formatHint"></span></label>
       </div>
-      <p class="mute small" id="vTiers"></p>
       <div id="vAddons" class="checks"></div>
-      <div class="pricebox" id="vPrice"></div>
-      <button class="primary" id="vAdd">Ajouter au panier</button>
+      <h3 data-i18n="priceTitle"></h3>
+      <div class="pricebox" id="vPrice" aria-live="polite"></div>
+      <button class="primary big" id="vAdd" data-i18n="addCart"></button>
     </section>
 
     <!-- Montage -->
     <section data-tab="editing" hidden>
-      <h2>Montage vidéo</h2>
+      <h2 data-i18n="editingH"></h2>
+      <p class="desc" data-i18n="editingDesc"></p>
       <div class="grid3">
-        <label>Durée de la vidéo<select id="eTier"></select></label>
-        <label>Révisions en plus<input id="eRev" type="number" min="0" max="20" value="0"></label>
+        <label><span data-i18n="editDuration"></span><select id="eTier"></select></label>
+        <label><span data-i18n="editRev"></span><input id="eRev" type="number" inputmode="numeric" min="0" max="20" value="0"><span class="hint" id="eRevHint"></span></label>
       </div>
-      <div class="checks"><label class="check"><input id="eSubs" type="checkbox"> <span id="eSubsLabel">Sous-titres</span></label></div>
-      <div class="pricebox" id="ePrice"></div>
-      <button class="primary" id="eAdd">Ajouter au panier</button>
+      <div class="checks"><label class="optcard" id="eSubsCard"><input id="eSubs" type="checkbox"><span class="opttext"><span class="optname" id="eSubsLabel"></span></span></label></div>
+      <h3 data-i18n="priceTitle"></h3>
+      <div class="pricebox" id="ePrice" aria-live="polite"></div>
+      <button class="primary big" id="eAdd" data-i18n="addCart"></button>
     </section>
 
     <!-- Pub -->
     <section data-tab="ad" hidden>
-      <h2>Production publicitaire</h2>
-      <p class="mute">Sur devis : décrivez votre projet, le studio vous répond avec un prix.</p>
-      <label>Votre projet<textarea id="aBrief" rows="4" maxlength="2000" placeholder="Ex. : pub de 30 s pour une marque de parfum, tournage en studio, 2 formats."></textarea></label>
-      <button class="primary" id="aAdd" style="margin-top:12px">Ajouter au panier</button>
+      <h2 data-i18n="adH"></h2>
+      <p class="desc" data-i18n="adDesc"></p>
+      <label><span data-i18n="adBrief"></span><textarea id="aBrief" rows="4" maxlength="2000" data-i18n-ph="adPh"></textarea></label>
+      <button class="primary big" id="aAdd" data-i18n="addCart"></button>
     </section>
 
     <!-- Panier -->
     <section id="cartBox">
-      <h2>Votre demande</h2>
-      <p class="mute" id="cartEmpty">Votre panier est vide.</p>
+      <h2 class="steph" data-i18n="cartH"></h2>
+      <p class="mute" id="cartEmpty" data-i18n="cartEmpty"></p>
       <div id="cartLines"></div>
       <div id="cartTotals" class="totals" hidden></div>
 
       <div id="contactForm" hidden>
-        <h2 style="margin-top:20px">Vos coordonnées</h2>
+        <h2 class="steph" style="margin-top:20px" data-i18n="contactH"></h2>
+        <p class="hint" data-i18n="contactHint"></p>
         <div class="grid3">
-          <label>Nom et prénom<input id="cName" autocomplete="name" maxlength="80"></label>
-          <label>Téléphone<input id="cPhone" type="tel" autocomplete="tel" placeholder="0555 12 34 56"></label>
+          <label><span data-i18n="name"></span><input id="cName" autocomplete="name" maxlength="80"></label>
+          <label><span data-i18n="phone"></span><input id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="0555 12 34 56" dir="ltr"></label>
         </div>
-        <label style="margin-top:8px">Message (facultatif)<textarea id="cNote" rows="2" maxlength="1000"></textarea></label>
-        <p class="mute small" id="holdInfo"></p>
-        <button class="primary big" id="send">Envoyer ma demande</button>
+        <label style="margin-top:8px"><span data-i18n="note"></span><textarea id="cNote" rows="2" maxlength="1000" data-i18n-ph="notePh"></textarea></label>
+        <p class="hint" id="holdInfo"></p>
+        <button class="primary big" id="send" data-i18n="send"></button>
+        <p class="hint center" data-i18n="sendHint"></p>
       </div>
     </section>
   </div>
 
   <!-- Demande envoyée -->
   <section id="done" hidden>
-    <h2>Demande envoyée ✓</h2>
-    <p>Demande n° <strong id="dCode"></strong></p>
+    <h2 data-i18n="doneH"></h2>
+    <p><span data-i18n="doneCode"></span> <strong id="dCode" dir="ltr"></strong></p>
     <div id="dSummary" class="totals"></div>
     <div id="dWhatsapp" hidden>
-      <p><b>Dernière étape :</b> envoyez votre demande au studio sur WhatsApp. Le message est déjà écrit, il vous suffit d'appuyer sur « Envoyer ».</p>
-      <a class="button whatsapp big" id="dWaLink" target="_blank" rel="noopener">Envoyer sur WhatsApp</a>
+      <p><b data-i18n="doneWaStep"></b></p>
+      <a class="button whatsapp big" id="dWaLink" target="_blank" rel="noopener" data-i18n="doneWaBtn"></a>
     </div>
     <div id="dPay" class="note" hidden></div>
-    <p class="mute small">Gardez ce lien pour suivre votre demande :</p>
-    <div class="copyrow"><input id="dLink" readonly><button id="dCopy">Copier</button></div>
-    <div class="actions"><a class="button" id="dOpen">Ouvrir le suivi</a><button id="dNew">Nouvelle demande</button></div>
+    <p class="mute small" data-i18n="doneKeep"></p>
+    <div class="copyrow"><input id="dLink" readonly dir="ltr"><button id="dCopy" data-i18n="copy"></button></div>
+    <div class="actions"><a class="button" id="dOpen" data-i18n="openTrack"></a><button id="dNew" data-i18n="newReq"></button></div>
   </section>
 
-  <div id="msg" class="msg" hidden></div>
+  <div id="msg" class="msg" role="alert" hidden></div>
 </main>
 
 <script type="module">
-  import { db, trackingUrl } from "./lib/firebase.js";
-  import { doc, getDoc, getDocs, collection, query, where, writeBatch, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
-  import { priceCart, normalizeDzPhone, randomId, shortCode, fmtDA, whatsappLink, clientWhatsappText, buildClientOrder } from "./lib/studio-core.js";
+  import { lang, t, tr, money, duration, ltr, applyPage } from "./lib/i18n.js";
+  applyPage(document.getElementById("langs"));
+  document.title = "Studio — " + t("pageTitle");
+
+  const { db, trackingUrl } = await import("./lib/firebase.js");
+  const { doc, getDoc, getDocs, collection, query, where, writeBatch, serverTimestamp, Timestamp } = await import("https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js");
+  const { priceCart, normalizeDzPhone, randomId, shortCode, whatsappLink, clientWhatsappText, buildClientOrder } = await import("./lib/studio-core.js");
 
   const $ = (id) => document.getElementById(id);
   const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
   const show = (text, bad = false) => { const m = $("msg"); m.textContent = text; m.className = "msg" + (bad ? " bad" : ""); m.hidden = !text; };
+  const errText = (e) => tr(e?.message || String(e));
 
   let catalog = null;
   let contact = { holdHours: 24 };
@@ -156,26 +181,27 @@
   function loadCart() { try { return JSON.parse(localStorage.getItem("studio-cart") || "[]"); } catch { return []; } }
   function saveCart() { try { localStorage.setItem("studio-cart", JSON.stringify(cart)); } catch { /* navigation privée */ } }
 
-  const TABS = [["studio", "Location studio"], ["product", "Shooting produit"], ["video", "Vidéo"], ["editing", "Montage"], ["ad", "Pub"]];
+  const TABS = ["studio", "product", "video", "editing", "ad"];
   function selectTab(id) {
     for (const b of $("tabs").children) b.setAttribute("aria-selected", String(b.dataset.id === id));
     document.querySelectorAll("section[data-tab]").forEach((s) => (s.hidden = s.dataset.tab !== id));
   }
 
-  const linePrice = (line) => { try { return { ok: true, p: priceCart(catalog, [line], Date.now()).lines[0] }; } catch (e) { return { ok: false, error: e.message }; } };
+  const linePrice = (line) => { try { return { ok: true, p: priceCart(catalog, [line], Date.now()).lines[0] }; } catch (e) { return { ok: false, error: errText(e) }; } };
+  const priceText = (price) => (price === null ? t("onQuote") : money(price));
   function renderPrice(box, line) {
     const r = linePrice(line);
     box.replaceChildren();
     if (!r.ok) { box.append(el("span", { className: "bad", textContent: r.error })); return false; }
-    for (const d of r.p.details) box.append(el("div", { className: "detail" }, el("span", { textContent: d.label }), el("span", { textContent: fmtDA(d.amount) })));
-    box.append(el("div", { className: "detail strong" }, el("span", { textContent: "Prix" }), el("span", { textContent: r.p.price === null ? "sur devis" : fmtDA(r.p.price) })));
+    for (const d of r.p.details) box.append(el("div", { className: "detail" }, el("span", { textContent: tr(d.label) }), el("span", { className: "amt", textContent: money(d.amount) })));
+    box.append(el("div", { className: "detail strong" }, el("span", { textContent: t("price") }), el("span", { className: "amt", textContent: priceText(r.p.price) })));
     return true;
   }
   // Options à cocher : une carte par option, avec son prix (fixe ou à l'heure) et sa description.
   function checks(container, addons) {
     container.replaceChildren(...addons.map((a) => {
       const box = el("input", { type: "checkbox", value: a.id });
-      const price = "+" + fmtDA(a.price) + (a.unit === "hour" ? " / heure" : "");
+      const price = "+" + money(a.price) + (a.unit === "hour" ? t("perHour") : "");
       const text = el("span", { className: "opttext" }, el("span", { className: "optname", textContent: a.name }), el("span", { className: "optprice", textContent: price }));
       if (a.description) text.append(el("span", { className: "optdesc", textContent: a.description }));
       const card = el("label", { className: "optcard" }, box, text);
@@ -194,10 +220,7 @@
   const minToHm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
   const hhmm = (m) => minToHm(m).replace(":", "");
   const ymd = (y, mo, d) => new Date(Date.UTC(y, mo, d)).toISOString().slice(0, 10);
-  const durLabel = (m) => (m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m / 60} h`);
-  const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-  const WEEKDAYS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
-  const WEEKDAYS_LONG = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+  const MONTHS = t("months"), WEEKDAYS = t("wd"), WEEKDAYS_LONG = t("wdLong");
   const MONTHS_AHEAD = 6;
 
   const sel = { date: "", start: null, end: null, waitingEnd: false };
@@ -256,30 +279,29 @@
 
   async function renderCalendar() {
     const { y, m } = calMonth;
-    const t = today();
+    const td = today();
     const idx = (o) => o.y * 12 + o.m;
-    const minIdx = Number(t.slice(0, 4)) * 12 + Number(t.slice(5, 7)) - 1;
+    const minIdx = Number(td.slice(0, 4)) * 12 + Number(td.slice(5, 7)) - 1;
     $("sMonth").textContent = `${MONTHS[m]} ${y}`;
     $("sPrev").disabled = idx(calMonth) <= minIdx;
     $("sNext").disabled = idx(calMonth) >= minIdx + MONTHS_AHEAD;
     const cal = $("sCal");
     if (!loadedMonths.has(`${y}-${m}`)) {
-      cal.replaceChildren(el("p", { className: "mute small calwait", textContent: "Chargement des disponibilités…" }));
-      try { await loadMonth(y, m); } catch (e) { cal.replaceChildren(el("p", { className: "bad small calwait", textContent: "Disponibilités indisponibles : " + (e.message || e) })); return; }
+      cal.replaceChildren(el("p", { className: "mute small calwait", textContent: t("availLoading") }));
+      try { await loadMonth(y, m); } catch (e) { cal.replaceChildren(el("p", { className: "bad small calwait", textContent: t("availFail") + errText(e) })); return; }
       if (calMonth.y !== y || calMonth.m !== m) return; // le client a changé de mois entre-temps
     }
     const cells = WEEKDAYS.map((w) => el("span", { className: "calwd", textContent: w }));
     const firstDow = new Date(Date.UTC(y, m, 1)).getUTCDay();
     for (let i = 0; i < firstDow; i++) cells.push(el("span"));
     const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-    const titles = { closed: "Fermé", past: "Passé", full: "Complet", part: "En partie réservé", free: "Libre" };
     for (let d = 1; d <= days; d++) {
       const date = ymd(y, m, d);
       const status = dayStatus(date);
-      const b = el("button", { type: "button", textContent: String(d), title: titles[status],
-        className: `calday ${status}` + (date === sel.date ? " on" : "") + (date === t ? " today" : "") });
+      const b = el("button", { type: "button", textContent: String(d), title: t("st_" + status),
+        className: `calday ${status}` + (date === sel.date ? " on" : "") + (date === td ? " today" : "") });
       b.disabled = status === "closed" || status === "past" || status === "full";
-      b.setAttribute("aria-label", `${d} ${MONTHS[m]} : ${titles[status]}`);
+      b.setAttribute("aria-label", `${d} ${MONTHS[m]} : ${t("st_" + status)}`);
       b.onclick = () => pickDay(date);
       cells.push(b);
     }
@@ -296,18 +318,19 @@
   function renderSlots() {
     const box = $("sSlots");
     $("sSlotLegend").hidden = !sel.date;
-    if (!sel.date) { box.replaceChildren(); $("sDayTitle").textContent = "Choisissez un jour"; $("sHours").textContent = ""; refreshStudioPrice(); return; }
+    if (!sel.date) { box.replaceChildren(); $("sDayTitle").textContent = t("chooseDay"); $("sHours").textContent = ""; refreshStudioPrice(); return; }
     const d = new Date(sel.date + "T12:00:00Z");
     $("sDayTitle").textContent = `${WEEKDAYS_LONG[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
     const day = dayBlocks(sel.date);
-    if (!day) { $("sHours").textContent = "Le studio est fermé ce jour-là."; box.replaceChildren(); refreshStudioPrice(); return; }
+    if (!day) { $("sHours").textContent = t("closedDay"); box.replaceChildren(); refreshStudioPrice(); return; }
     const st = catalog.studio;
-    $("sHours").textContent = `Ouvert de ${day.hours.open} à ${day.hours.close} · minimum ${durLabel(minSpan())}. Les cases rouges sont déjà réservées.`;
+    $("sHours").textContent = t("openInfo", { o: ltr(day.hours.open), c: ltr(day.hours.close), m: duration(minSpan()) });
     box.replaceChildren(...day.blocks.map((b) => {
       const chosen = sel.start !== null && b.m >= sel.start && b.m < sel.end;
-      const chip = el("button", { type: "button", className: `slot ${b.state}` + (chosen ? " on" : ""), textContent: `${minToHm(b.m)} – ${minToHm(b.m + st.stepMinutes)}` });
+      const chip = el("button", { type: "button", dir: "ltr", className: `slot ${b.state}` + (chosen ? " on" : ""), textContent: `${minToHm(b.m)} – ${minToHm(b.m + st.stepMinutes)}` });
       chip.disabled = b.state !== "free";
-      chip.title = b.state === "busy" ? "Déjà réservé" : b.state === "past" ? "Heure passée" : "";
+      chip.title = b.state === "busy" ? t("legBooked") : b.state === "past" ? t("pastHour") : "";
+      chip.setAttribute("aria-pressed", String(chosen));
       chip.onclick = () => pickBlock(b.m, day.blocks);
       return chip;
     }));
@@ -324,14 +347,12 @@
       if (m >= sel.start) {
         const end = Math.max(m + st.stepMinutes, sel.start + minSpan());
         if (isFreeRange(blocks, sel.start, end)) { sel.end = end; sel.waitingEnd = false; return renderSlots(); }
-        return slotMsg("Une partie de ces heures est déjà réservée : choisissez une fin plus tôt ou un autre début.", true);
+        return slotMsg(t("conflictEnd"));
       }
       if (isFreeRange(blocks, m, sel.end)) { sel.start = m; sel.waitingEnd = false; return renderSlots(); }
     }
     const end = m + minSpan();
-    if (!isFreeRange(blocks, m, end)) {
-      return slotMsg(`Il faut au moins ${durLabel(minSpan())} de libre à partir de ${minToHm(m)}. Choisissez une autre heure de début.`, true);
-    }
+    if (!isFreeRange(blocks, m, end)) return slotMsg(t("needFree", { d: duration(minSpan()), h: ltr(minToHm(m)) }));
     sel.start = m; sel.end = end; sel.waitingEnd = true;
     renderSlots();
   }
@@ -341,11 +362,11 @@
     const range = $("sRange");
     range.hidden = !ready;
     if (ready) {
-      range.replaceChildren(el("b", { textContent: `De ${minToHm(sel.start)} à ${minToHm(sel.end)}` }), ` · ${durLabel(sel.end - sel.start)}`,
-        el("span", { className: "mute small", textContent: sel.waitingEnd ? " — touchez une autre case pour choisir l'heure de fin." : " — touchez une case pour recommencer." }));
+      range.replaceChildren(el("b", { textContent: t("range", { a: ltr(minToHm(sel.start)), b: ltr(minToHm(sel.end)) }) }), ` · ${duration(sel.end - sel.start)}`,
+        el("span", { className: "mute small", textContent: sel.waitingEnd ? t("rangeWaitEnd") : t("rangeRestart") }));
     }
     $("sAdd").disabled = !ready || !renderPrice($("sPrice"), studioLine());
-    if (!ready) $("sPrice").replaceChildren(el("span", { className: "mute", textContent: sel.date ? "Touchez l'heure de début dans la liste des heures." : "Choisissez d'abord un jour dans le calendrier." }));
+    if (!ready) $("sPrice").replaceChildren(el("span", { className: "mute", textContent: sel.date ? t("pickStart") : t("pickDayFirst") }));
   }
 
   // Recharge les disponibilités (après un conflit) en gardant le jour choisi s'il reste libre.
@@ -360,20 +381,20 @@
 
   function initStudio() {
     const st = catalog.studio;
-    const t = today();
-    calMonth = { y: Number(t.slice(0, 4)), m: Number(t.slice(5, 7)) - 1 };
+    const td = today();
+    calMonth = { y: Number(td.slice(0, 4)), m: Number(td.slice(5, 7)) - 1 };
     const move = (delta) => { const i = calMonth.y * 12 + calMonth.m + delta; calMonth = { y: Math.floor(i / 12), m: i % 12 }; renderCalendar(); };
     $("sPrev").onclick = () => move(-1);
     $("sNext").onclick = () => move(1);
     checks($("sAddons"), st.addons || []);
-    $("sOptTitle").hidden = !(st.addons || []).length;
+    $("sOptTitle").hidden = $("sOptHint").hidden = !(st.addons || []).length;
     $("sAddons").onchange = refreshStudioPrice;
     $("sAdd").onclick = () => addLine(studioLine());
     renderSlots();
     // Premier jour réservable proposé d'office (dans les 31 prochains jours).
     renderCalendar().then(async () => {
       for (let i = 0; i < 31 && !sel.date; i++) {
-        const dt = new Date(Date.parse(t + "T12:00:00Z") + i * 864e5);
+        const dt = new Date(Date.parse(td + "T12:00:00Z") + i * 864e5);
         try { await loadMonth(dt.getUTCFullYear(), dt.getUTCMonth()); } catch { break; }
         const date = dt.toISOString().slice(0, 10);
         if (["free", "part"].includes(dayStatus(date))) { sel.date = date; calMonth = { y: dt.getUTCFullYear(), m: dt.getUTCMonth() }; }
@@ -384,19 +405,25 @@
   }
 
   // ---------- Autres services ----------
+  const secLabel = (s) => (s >= 60 ? (lang === "ar" ? `${s / 60} دقيقة` : `${s / 60} min`) : (lang === "ar" ? `${s} ثانية` : `${s} s`));
   function initOthers() {
     const pr = catalog.product, vi = catalog.video, ed = catalog.editing;
-    $("pPack").replaceChildren(...pr.packages.map((p) => new Option(`${p.name} — ${fmtDA(p.price)}`, p.id)));
+    $("pPack").replaceChildren(...pr.packages.map((p) => new Option(`${p.name} — ${money(p.price)}`, p.id)));
+    $("pExtraHint").textContent = t("extraHint", { p: money(pr.extraPhotoPrice) });
     checks($("pAddons"), pr.addons || []);
     const pLine = () => ({ service: "product", packageId: $("pPack").value, extraPhotos: Math.max(0, Math.floor(Number($("pExtra").value) || 0)), addons: checked($("pAddons")) });
-    const pRefresh = () => ($("pAdd").disabled = !renderPrice($("pPrice"), pLine()));
+    const pRefresh = () => {
+      const k = pr.packages.find((x) => x.id === $("pPack").value);
+      $("pPackHint").textContent = k ? t("packContent", { n: k.products, k: k.photosPerProduct, t: k.products * k.photosPerProduct }) : t("packHint");
+      $("pAdd").disabled = !renderPrice($("pPrice"), pLine());
+    };
     $("pPack").onchange = $("pExtra").oninput = $("pAddons").onchange = pRefresh;
     $("pAdd").onclick = () => addLine(pLine());
     pRefresh();
 
     $("vFormat").replaceChildren(...vi.formats.map((f) => new Option(f, f)));
     $("vReels").max = String(vi.maxReels);
-    $("vTiers").textContent = vi.volumeTiers.map((t) => `−${t.percent} % dès ${t.minQty} vidéos`).join(" · ");
+    $("vTiers").textContent = vi.volumeTiers.map((x) => t("tiers", { p: x.percent, n: x.minQty })).join(" · ");
     checks($("vAddons"), vi.addons || []);
     const vLine = () => ({ service: "video", reels: Math.floor(Number($("vReels").value) || 0), format: $("vFormat").value, addons: checked($("vAddons")) });
     const vRefresh = () => ($("vAdd").disabled = !renderPrice($("vPrice"), vLine()));
@@ -404,10 +431,11 @@
     $("vAdd").onclick = () => addLine(vLine());
     vRefresh();
 
-    $("eTier").replaceChildren(...ed.durationTiers.map((t) => new Option(`Jusqu'à ${t.maxSeconds >= 60 ? t.maxSeconds / 60 + " min" : t.maxSeconds + " s"} — ${fmtDA(t.price)}`, String(t.maxSeconds))));
-    $("eSubsLabel").textContent = `Sous-titres (+${fmtDA(ed.subtitlesPrice)})`;
+    $("eTier").replaceChildren(...ed.durationTiers.map((x) => new Option(t("upTo", { d: secLabel(x.maxSeconds), p: money(x.price) }), String(x.maxSeconds))));
+    $("eSubsLabel").textContent = t("subs", { p: money(ed.subtitlesPrice) });
+    $("eRevHint").textContent = t("revHint", { n: ed.includedRevisions });
     const eLine = () => ({ service: "editing", videos: [{ seconds: Number($("eTier").value), subtitles: $("eSubs").checked, extraRevisions: Math.max(0, Math.floor(Number($("eRev").value) || 0)) }] });
-    const eRefresh = () => ($("eAdd").disabled = !renderPrice($("ePrice"), eLine()));
+    const eRefresh = () => { $("eSubsCard").classList.toggle("on", $("eSubs").checked); $("eAdd").disabled = !renderPrice($("ePrice"), eLine()); };
     $("eTier").onchange = $("eSubs").onchange = $("eRev").oninput = eRefresh;
     $("eAdd").onclick = () => addLine(eLine());
     eRefresh();
@@ -419,14 +447,14 @@
   function addLine(line) {
     const r = linePrice(line);
     if (!r.ok) return show(r.error, true);
-    try { priceCart(catalog, [...cart, line], Date.now()); } catch (e) { return show(e.message, true); }
+    try { priceCart(catalog, [...cart, line], Date.now()); } catch (e) { return show(errText(e), true); }
     cart.push(line); saveCart(); show(""); renderCart();
     $("cartBox").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function cartPricing() {
     if (!cart.length) return null;
-    try { return priceCart(catalog, cart, Date.now()); } catch (e) { return { error: e.message }; }
+    try { return priceCart(catalog, cart, Date.now()); } catch (e) { return { error: errText(e) }; }
   }
 
   function renderCart() {
@@ -438,27 +466,27 @@
     box.replaceChildren();
     cart.forEach((line, i) => {
       const priced = p && !p.error ? p.lines[i] : null;
-      const del = el("button", { className: "link", textContent: "Retirer" });
+      const del = el("button", { className: "link", textContent: t("remove") });
       del.onclick = () => { cart.splice(i, 1); saveCart(); renderCart(); };
       box.append(el("div", { className: "cartline" },
-        el("span", { textContent: priced ? priced.label : line.service }),
-        el("span", { textContent: priced ? (priced.price === null ? "sur devis" : fmtDA(priced.price)) : "" }),
+        el("span", { textContent: priced ? tr(priced.label) : t("tab_" + line.service) }),
+        el("span", { className: "amt", textContent: priced ? priceText(priced.price) : "" }),
         del));
     });
-    if (p && p.error) { show(p.error + " Retirez la ligne concernée.", true); $("send").disabled = true; return; }
+    if (p && p.error) { show(p.error + t("removeLine"), true); $("send").disabled = true; return; }
     $("send").disabled = !cart.length;
     if (!p) return;
     $("cartTotals").replaceChildren(...totalsRows(p));
     const hasStudio = p.lines.some((l) => l.slotKeys && l.slotKeys.length);
-    $("holdInfo").textContent = hasStudio ? `Le créneau vous est réservé pendant ${contact.holdHours} h, le temps de verser l'acompte.` : "";
+    $("holdInfo").textContent = hasStudio ? t("hold", { h: contact.holdHours }) : "";
   }
 
   function totalsRows(p) {
-    const row = (a, b, cls = "") => el("div", { className: "detail " + cls }, el("span", { textContent: a }), el("span", { textContent: b }));
-    if (p.total === null) return [row("Sous-total", fmtDA(p.subtotal)), row("Total", "sur devis (le studio vous envoie le prix)", "strong")];
-    const out = [row("Sous-total", fmtDA(p.subtotal))];
-    if (p.discount) out.push(row(p.discount.name, "−" + fmtDA(p.discount.amount)));
-    out.push(row("Total", fmtDA(p.total), "strong"), row(`Acompte à verser (${p.depositPercent} %)`, fmtDA(p.deposit)), row("Reste à payer au studio", fmtDA(p.remaining)));
+    const row = (a, b, cls = "") => el("div", { className: "detail " + cls }, el("span", { textContent: a }), el("span", { className: "amt", textContent: b }));
+    if (p.total === null) return [row(t("subtotal"), money(p.subtotal)), row(t("total"), t("totalQuote"), "strong")];
+    const out = [row(t("subtotal"), money(p.subtotal))];
+    if (p.discount) out.push(row(p.discount.name, money(-p.discount.amount)));
+    out.push(row(t("total"), money(p.total), "strong"), row(t("deposit", { p: p.depositPercent }), money(p.deposit)), row(t("remaining"), money(p.remaining)));
     return out;
   }
 
@@ -467,12 +495,12 @@
     const btn = $("send");
     let phone;
     const name = $("cName").value.trim().replace(/\s+/g, " ");
-    if (name.length < 2) return show("Indiquez votre nom.", true);
-    try { phone = normalizeDzPhone($("cPhone").value).e164; } catch (e) { return show(e.message, true); }
+    if (name.length < 2) { $("cName").focus(); return show(t("needName"), true); }
+    try { phone = normalizeDzPhone($("cPhone").value).e164; } catch (e) { $("cPhone").focus(); return show(errText(e), true); }
     const pricing = cartPricing();
-    if (!pricing || pricing.error) return show(pricing?.error || "Panier vide.", true);
+    if (!pricing || pricing.error) return show(pricing?.error || t("emptyCart"), true);
 
-    btn.disabled = true; show("Envoi…");
+    btn.disabled = true; show(t("sending"));
     const orderId = randomId(20), trackingToken = randomId(32);
     const built = buildClientOrder({ orderId, trackingToken, name, phone, note: $("cNote").value.trim(), pricing, holdExpiresAtMs: Date.now() + contact.holdHours * 3600e3 });
     const hold = built.holdExpiresAtMs ? Timestamp.fromMillis(built.holdExpiresAtMs) : null;
@@ -489,12 +517,12 @@
       btn.disabled = false;
       busySlots.clear();
       if (e.code === "permission-denied" && built.slotKeys.length) {
-        show("Ce créneau vient d'être pris par quelqu'un d'autre (ou les tarifs ont changé). Choisissez un autre horaire.", true);
+        show(t("slotTaken"), true);
         cart = cart.filter((l) => l.service !== "studio"); saveCart(); renderCart(); selectTab("studio"); refreshStarts();
       } else if (e.code === "permission-denied") {
-        show("Les tarifs viennent d'être mis à jour : rechargez la page puis renvoyez votre demande.", true);
+        show(t("ratesChanged"), true);
       } else {
-        show("Envoi impossible : " + (e.message || e), true);
+        show(t("sendFail") + errText(e), true);
       }
       return;
     }
@@ -506,42 +534,49 @@
     const url = trackingUrl(trackingToken);
     $("shop").hidden = true; $("done").hidden = false;
     $("dCode").textContent = shortCode(orderId);
-    $("dSummary").replaceChildren(...pricing.lines.map((l) => el("div", { className: "detail" }, el("span", { textContent: l.label }), el("span", { textContent: l.price === null ? "sur devis" : fmtDA(l.price) }))), ...totalsRows(pricing));
+    $("dSummary").replaceChildren(...pricing.lines.map((l) => el("div", { className: "detail" }, el("span", { textContent: tr(l.label) }), el("span", { className: "amt", textContent: priceText(l.price) }))), ...totalsRows(pricing));
     $("dLink").value = url;
     $("dOpen").href = url;
     if (contact.whatsapp) {
-      // Le message contient toujours le lien de suivi (sinon pas de bouton : le lien reste affiché plus bas).
+      // Message au studio, en français pour l'équipe ; il contient toujours le lien de suivi
+      // (sinon pas de bouton : le lien reste affiché plus bas).
       try {
-        $("dWaLink").href = whatsappLink(contact.whatsapp, clientWhatsappText({ code: shortCode(orderId), name, pricing, trackingUrl: url }));
+        const text = clientWhatsappText({ code: shortCode(orderId), name, pricing, trackingUrl: url }) + (t("clientLang") ? `\nLangue du client : ${t("clientLang")}` : "");
+        $("dWaLink").href = whatsappLink(contact.whatsapp, text);
         $("dWhatsapp").hidden = false;
-      } catch (e) { show(e.message || String(e), true); }
+      } catch (e) { show(errText(e), true); }
     }
     const pay = [contact.depositNote, contact.baridimob && "BaridiMob : " + contact.baridimob, contact.ccp && "CCP : " + contact.ccp].filter(Boolean);
-    if (pricing.deposit && pay.length) { $("dPay").textContent = `Acompte de ${fmtDA(pricing.deposit)} à verser.\n` + pay.join("\n"); $("dPay").hidden = false; }
+    if (pricing.deposit && pay.length) { $("dPay").textContent = t("payDeposit", { p: money(pricing.deposit) }) + "\n" + pay.join("\n"); $("dPay").hidden = false; }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
-  $("dCopy").onclick = async () => { try { await navigator.clipboard.writeText($("dLink").value); $("dCopy").textContent = "Copié ✓"; } catch { $("dLink").select(); } };
+  $("dCopy").onclick = async () => { try { await navigator.clipboard.writeText($("dLink").value); $("dCopy").textContent = t("copied"); } catch { $("dLink").select(); } };
   $("dNew").onclick = () => location.reload();
 
   // ---------- Démarrage ----------
   try {
     const [c, k] = await Promise.all([getDoc(doc(db, "publicSettings", "catalog")), getDoc(doc(db, "publicSettings", "contact"))]);
-    if (!c.exists()) throw new Error("Les tarifs ne sont pas encore publiés. Revenez bientôt.");
+    if (!c.exists()) throw new Error(t("notPublished"));
     catalog = c.data().catalog;
     if (k.exists()) contact = { ...contact, ...k.data() };
-    if (contact.studioName) { $("studioName").textContent = contact.studioName; document.title = contact.studioName + " — Réserver"; }
+    if (contact.studioName) { $("studioName").textContent = contact.studioName; document.title = contact.studioName + " — " + t("pageTitle"); }
     $("provisional").hidden = !catalog.provisional;
-    const enabled = TABS.filter(([id]) => catalog[id].enabled);
-    $("tabs").replaceChildren(...enabled.map(([id, label]) => { const b = el("button", { textContent: label, role: "tab" }); b.dataset.id = id; b.onclick = () => selectTab(id); return b; }));
+    const enabled = TABS.filter((id) => catalog[id].enabled);
+    $("tabs").replaceChildren(...enabled.map((id) => {
+      const b = el("button", { type: "button", role: "tab", className: "service" }, el("b", { textContent: t("tab_" + id) }), el("span", { textContent: t("tabd_" + id) }));
+      b.dataset.id = id;
+      b.onclick = () => selectTab(id);
+      return b;
+    }));
     // Panier gardé d'une visite précédente : on retire ce qui n'est plus valable.
     cart = cart.filter((l) => linePrice(l).ok);
     saveCart();
     initStudio(); initOthers();
-    selectTab(enabled[0]?.[0]);
+    selectTab(enabled[0]);
     $("loading").hidden = true; $("shop").hidden = false;
     renderCart();
   } catch (e) {
-    $("loading").textContent = e.message || String(e);
+    $("loading").textContent = errText(e);
     $("loading").className = "msg bad";
   }
 </script>

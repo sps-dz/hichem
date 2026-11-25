@@ -7,67 +7,74 @@
 <title>Studio — Suivi de ma demande</title>
 <link rel="stylesheet" href="lib/studio.css">
 </head>
-<body>
+<body class="client">
 <main>
-  <h1>Suivi de ma demande</h1>
-  <div id="msg" class="msg">Chargement…</div>
+  <header class="top">
+    <h1 data-i18n="trackTitle">Suivi de ma demande</h1>
+    <div class="langs" id="langs" role="group" aria-label="Langue / اللغة / Language"></div>
+  </header>
+  <div id="msg" class="msg" data-i18n="trackLoading">Chargement…</div>
   <section id="card" hidden>
-    <p>Demande n° <strong id="code"></strong><span id="ref"></span> — <span id="status" class="status"></span></p>
-    <p id="explain"></p>
+    <p><span data-i18n="doneCode"></span> <strong id="code" dir="ltr"></strong><span id="ref" dir="ltr"></span> — <span id="status" class="status"></span></p>
+    <p id="explain" class="desc"></p>
     <div id="lines" class="totals"></div>
     <div id="pay" class="note" hidden></div>
-    <a class="button whatsapp big" id="wa" target="_blank" rel="noopener" hidden>Écrire au studio sur WhatsApp</a>
+    <a class="button whatsapp big" id="wa" target="_blank" rel="noopener" hidden data-i18n="writeStudio"></a>
     <p class="mute small" id="when"></p>
   </section>
-  <p class="actions"><a class="button" href="./">Nouvelle demande</a></p>
+  <p class="actions"><a class="button" href="./" data-i18n="newReq"></a></p>
 </main>
 <script type="module">
-  import { db } from "./lib/firebase.js";
-  import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
-  import { fmtDA, whatsappLink, algiersLabel } from "./lib/studio-core.js";
+  import { t, tr, money, ltr, applyPage } from "./lib/i18n.js";
+  applyPage(document.getElementById("langs"));
+  document.title = "Studio — " + t("trackTitle");
 
   const $ = (id) => document.getElementById(id);
   const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
-  const LABEL = { pending: "En attente de l'acompte", confirmed: "Confirmée", cancelled: "Annulée", done: "Terminée" };
 
   try {
     const token = new URLSearchParams(location.search).get("t") || "";
-    if (!/^[A-Za-z0-9]{32}$/.test(token)) throw new Error("Lien de suivi incomplet : ouvrez le lien reçu après votre demande.");
+    if (!/^[A-Za-z0-9]{32}$/.test(token)) throw new Error(t("badLink"));
+    const { db } = await import("./lib/firebase.js");
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js");
+    const { whatsappLink, algiersLabel } = await import("./lib/studio-core.js");
     const [snap, contactSnap] = await Promise.all([getDoc(doc(db, "tracking", token)), getDoc(doc(db, "publicSettings", "contact"))]);
-    if (!snap.exists()) throw new Error("Demande introuvable : vérifiez le lien.");
-    const t = snap.data();
+    if (!snap.exists()) throw new Error(t("notFound"));
+    const d = snap.data();
     const contact = contactSnap.exists() ? contactSnap.data() : {};
-    $("code").textContent = t.code;
-    $("ref").textContent = t.ref ? ` · ${t.ref}` : "";
-    $("status").textContent = LABEL[t.status] || t.status;
-    $("status").className = "status " + t.status;
-    const expired = t.status === "pending" && t.holdExpiresAt && t.holdExpiresAt.toMillis() < Date.now();
-    $("explain").textContent = t.message || {
-      pending: expired ? "Le délai pour verser l'acompte est dépassé : le créneau n'est plus garanti. Contactez le studio." :
-        (t.quotePending ? "Le studio étudie votre demande et vous envoie le prix." : `Votre demande est enregistrée.${t.holdExpiresAt ? ` Le créneau vous est gardé jusqu'au ${algiersLabel(t.holdExpiresAt.toMillis())}, le temps de verser l'acompte.` : ""}`),
-      confirmed: "Acompte reçu : votre demande est confirmée.",
-      cancelled: "Cette demande est annulée.",
-      done: "Merci ! Cette demande est terminée.",
-    }[t.status] || "";
-    const row = (a, b, cls = "") => el("div", { className: "detail " + cls }, el("span", { textContent: a }), el("span", { textContent: b }));
-    const rows = t.lines.map((l) => row(l.label, l.price === null ? "sur devis" : fmtDA(l.price)));
-    if (t.total !== null && t.total !== undefined) {
-      rows.push(row("Total", fmtDA(t.total), "strong"));
-      if (t.deposit) rows.push(row("Acompte", fmtDA(t.deposit)), row("Reste à payer", fmtDA(t.remaining)));
+    $("code").textContent = d.code;
+    $("ref").textContent = d.ref ? ` · ${d.ref}` : "";
+    $("status").textContent = t("s_" + d.status) === "s_" + d.status ? d.status : t("s_" + d.status);
+    $("status").className = "status " + d.status;
+    const expired = d.status === "pending" && d.holdExpiresAt && d.holdExpiresAt.toMillis() < Date.now();
+    // Un message écrit par l'équipe reste tel quel ; sinon, explication dans la langue du client.
+    $("explain").textContent = d.message || {
+      pending: expired ? t("e_expired") :
+        (d.quotePending ? t("e_quote") : t("e_saved") + (d.holdExpiresAt ? t("e_hold", { d: ltr(algiersLabel(d.holdExpiresAt.toMillis())) }) : "")),
+      confirmed: t("e_confirmed"),
+      cancelled: t("e_cancelled"),
+      done: t("e_done"),
+    }[d.status] || "";
+    const row = (a, b, cls = "") => el("div", { className: "detail " + cls }, el("span", { textContent: a }), el("span", { className: "amt", textContent: b }));
+    const rows = d.lines.map((l) => row(tr(l.label), l.price === null ? t("onQuote") : money(l.price)));
+    if (d.total !== null && d.total !== undefined) {
+      rows.push(row(t("total"), money(d.total), "strong"));
+      if (d.deposit) rows.push(row(t("depositShort"), money(d.deposit)), row(t("remainingShort"), money(d.remaining)));
     }
     $("lines").replaceChildren(...rows);
-    if (t.status === "pending" && t.deposit) {
+    if (d.status === "pending" && d.deposit) {
       const pay = [contact.depositNote, contact.baridimob && "BaridiMob : " + contact.baridimob, contact.ccp && "CCP : " + contact.ccp].filter(Boolean);
-      if (pay.length) { $("pay").textContent = `Acompte de ${fmtDA(t.deposit)} à verser.\n` + pay.join("\n"); $("pay").hidden = false; }
+      if (pay.length) { $("pay").textContent = t("payDeposit", { p: money(d.deposit) }) + "\n" + pay.join("\n"); $("pay").hidden = false; }
     }
     if (contact.whatsapp) {
-      $("wa").href = whatsappLink(contact.whatsapp, `Bonjour, je vous écris au sujet de ma demande n° ${t.code}${t.ref ? ` (${t.ref})` : ""}.\nSuivi : ${location.href}`);
+      // Message au studio, en français pour l'équipe.
+      $("wa").href = whatsappLink(contact.whatsapp, `Bonjour, je vous écris au sujet de ma demande n° ${d.code}${d.ref ? ` (${d.ref})` : ""}.\nSuivi : ${location.href}` + (t("clientLang") ? `\nLangue du client : ${t("clientLang")}` : ""));
       $("wa").hidden = false;
     }
-    $("when").textContent = t.createdAt ? "Envoyée le " + algiersLabel(t.createdAt.toMillis()) : "";
+    $("when").textContent = d.createdAt ? t("sentOn") + ltr(algiersLabel(d.createdAt.toMillis())) : "";
     $("msg").hidden = true; $("card").hidden = false;
   } catch (e) {
-    $("msg").textContent = e.message || String(e);
+    $("msg").textContent = tr(e.message || String(e));
     $("msg").className = "msg bad";
   }
 </script>

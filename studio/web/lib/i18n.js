@@ -1,0 +1,488 @@
+// Langues du site client (français, arabe, anglais).
+// La langue suit celle du navigateur ; le client peut en changer avec les
+// boutons en haut de page (choix gardé sur son appareil). Les demandes, les
+// messages WhatsApp envoyés au studio et la page Équipe restent en français.
+
+export const LANGS = [
+  ["fr", "Français"],
+  ["ar", "العربية"],
+  ["en", "English"],
+];
+
+function pickLang() {
+  const ok = (l) => LANGS.some(([id]) => id === l);
+  try {
+    const q = new URLSearchParams(location.search).get("lang");
+    if (ok(q)) { try { localStorage.setItem("studio-lang", q); } catch { /* navigation privée */ } return q; }
+  } catch { /* adresse sans paramètres */ }
+  try {
+    const saved = localStorage.getItem("studio-lang");
+    if (ok(saved)) return saved;
+  } catch { /* navigation privée */ }
+  for (const l of navigator.languages || [navigator.language || ""]) {
+    const base = String(l).toLowerCase().slice(0, 2);
+    if (ok(base)) return base;
+  }
+  return "fr";
+}
+
+export const lang = pickLang();
+const AR = lang === "ar";
+
+/** Texte isolé de gauche à droite (heures, dates, montants) au milieu de l'arabe, sans retour à la ligne. */
+export const ltr = (s) => (AR ? "\u2066" + String(s).replace(/ /g, "\u00a0") + "\u2069" : s);
+
+const D = {
+  fr: {
+    pageTitle: "Réserver",
+    intro: "Louez le studio à l'heure ou confiez-nous vos photos et vidéos. Le prix s'affiche tout de suite, sans engagement.",
+    howTitle: "Comment ça marche ?",
+    how1: "Choisissez un service et vos options : le prix se calcule tout seul.",
+    how2: "Envoyez votre demande avec votre nom et votre téléphone.",
+    how3: "Versez l'acompte : votre réservation est confirmée.",
+    provisional: "Tarifs provisoires : ils peuvent encore changer avant la confirmation.",
+    loading: "Chargement des tarifs…",
+    chooseService: "1. Choisissez un service",
+    tab_studio: "Location studio", tabd_studio: "Le studio à l'heure, pour vos photos ou vidéos.",
+    tab_product: "Shooting produit", tabd_product: "Nous photographions vos produits pour votre boutique ou vos réseaux.",
+    tab_video: "Vidéo", tabd_video: "Reels et vidéos courtes tournés par notre équipe.",
+    tab_editing: "Montage", tabd_editing: "Vous avez filmé ? Nous montons votre vidéo.",
+    tab_ad: "Pub", tabd_ad: "Une publicité complète, de l'idée au tournage. Prix sur devis.",
+    studioH: "Location du studio",
+    studioDesc: "Vous louez le studio équipé pour la durée de votre choix. Le prix dépend de l'heure et du jour.",
+    studioSteps: "Choisissez un jour dans le calendrier, touchez l'heure de début, puis l'heure de fin.",
+    prevMonth: "Mois précédent", nextMonth: "Mois suivant",
+    legFree: "Libre", legPart: "En partie réservé", legFull: "Complet", legSel: "Votre choix", legBooked: "Déjà réservé",
+    chooseDay: "Choisissez un jour",
+    optTitle: "Options",
+    optHint: "Cochez ce que vous voulez : le prix se met à jour à chaque case.",
+    priceTitle: "Détail du prix",
+    addCart: "Ajouter à ma demande",
+    productH: "Shooting produit",
+    productDesc: "Vous nous confiez vos produits, nous les photographions sur fond propre, prêts pour votre boutique en ligne ou vos réseaux sociaux.",
+    packContent: "{n} produit(s) × {k} photo(s) = {t} photos au total.",
+    pack: "Pack", packHint: "Chaque pack comprend un nombre de produits et de photos par produit.",
+    extra: "Photos en plus", extraHint: "Photos en plus de celles du pack ({p} la photo).",
+    videoH: "Shooting vidéo",
+    videoDesc: "Notre équipe tourne vos vidéos courtes (reels, TikTok, stories) pour présenter votre marque ou vos produits.",
+    videoCount: "Nombre de vidéos", videoFormat: "Format",
+    formatHint: "9:16 = vertical (téléphone, reels) · 16:9 = horizontal (YouTube, écran).",
+    tiers: "−{p} % dès {n} vidéos",
+    editingH: "Montage vidéo",
+    editingDesc: "Vous avez déjà filmé : envoyez-nous vos images, nous montons une vidéo finie (coupes, musique, textes).",
+    editDuration: "Durée de la vidéo finale", editRev: "Révisions en plus",
+    revHint: "{n} révision(s) incluse(s). Une révision = une série de corrections que vous nous demandez.",
+    subs: "Sous-titres (+{p})",
+    upTo: "Jusqu'à {d} — {p}",
+    adH: "Production publicitaire",
+    adDesc: "Sur devis : décrivez votre projet, le studio vous répond avec un prix.",
+    adBrief: "Votre projet",
+    adPh: "Ex. : pub de 30 s pour une marque de parfum, tournage en studio, 2 formats.",
+    cartH: "2. Votre demande",
+    cartEmpty: "Rien pour l'instant : choisissez un service ci-dessus puis « Ajouter à ma demande ».",
+    remove: "Retirer",
+    contactH: "3. Vos coordonnées",
+    contactHint: "Le studio vous contacte sur ce numéro (WhatsApp ou appel).",
+    name: "Nom et prénom", phone: "Téléphone", note: "Message (facultatif)",
+    notePh: "Une précision, une question…",
+    send: "Envoyer ma demande",
+    sendHint: "Rien n'est payé maintenant : le studio vous indique comment verser l'acompte.",
+    hold: "Le créneau vous est réservé pendant {h} h, le temps de verser l'acompte.",
+    price: "Prix", onQuote: "sur devis", subtotal: "Sous-total", total: "Total",
+    totalQuote: "sur devis (le studio vous envoie le prix)",
+    deposit: "Acompte à verser ({p} %)", remaining: "Reste à payer au studio",
+    perHour: " / heure",
+    doneH: "Demande envoyée ✓", doneCode: "Demande n°",
+    doneWaStep: "Dernière étape : envoyez votre demande au studio sur WhatsApp. Le message est déjà écrit, il vous suffit d'appuyer sur « Envoyer ».",
+    doneWaBtn: "Envoyer sur WhatsApp",
+    doneKeep: "Gardez ce lien pour suivre votre demande :",
+    copy: "Copier", copied: "Copié ✓", openTrack: "Ouvrir le suivi", newReq: "Nouvelle demande",
+    payDeposit: "Acompte de {p} à verser.",
+    sending: "Envoi…", needName: "Indiquez votre nom.", emptyCart: "Votre demande est vide.",
+    slotTaken: "Ce créneau vient d'être pris par quelqu'un d'autre (ou les tarifs ont changé). Choisissez un autre horaire.",
+    ratesChanged: "Les tarifs viennent d'être mis à jour : rechargez la page puis renvoyez votre demande.",
+    sendFail: "Envoi impossible : ", removeLine: " Retirez la ligne concernée.",
+    notPublished: "Les tarifs ne sont pas encore publiés. Revenez bientôt.",
+    availLoading: "Chargement des disponibilités…", availFail: "Disponibilités indisponibles : ",
+    closedDay: "Le studio est fermé ce jour-là.",
+    openInfo: "Ouvert de {o} à {c} · minimum {m}. Les cases rouges sont déjà réservées.",
+    pastHour: "Heure passée",
+    conflictEnd: "Une partie de ces heures est déjà réservée : choisissez une fin plus tôt ou un autre début.",
+    needFree: "Il faut au moins {d} de libre à partir de {h}. Choisissez une autre heure de début.",
+    range: "De {a} à {b}",
+    rangeWaitEnd: " — touchez une autre case pour choisir l'heure de fin.",
+    rangeRestart: " — touchez une case pour recommencer.",
+    pickStart: "Touchez l'heure de début dans la liste des heures.",
+    pickDayFirst: "Choisissez d'abord un jour dans le calendrier.",
+    st_closed: "Fermé", st_past: "Passé", st_full: "Complet", st_part: "En partie réservé", st_free: "Libre",
+    clientLang: "",
+    // Page de suivi
+    trackTitle: "Suivi de ma demande", trackLoading: "Chargement…",
+    s_pending: "En attente de l'acompte", s_confirmed: "Confirmée", s_cancelled: "Annulée", s_done: "Terminée",
+    e_expired: "Le délai pour verser l'acompte est dépassé : le créneau n'est plus garanti. Contactez le studio.",
+    e_quote: "Le studio étudie votre demande et vous envoie le prix.",
+    e_saved: "Votre demande est enregistrée.",
+    e_hold: " Le créneau vous est gardé jusqu'au {d}, le temps de verser l'acompte.",
+    e_confirmed: "Acompte reçu : votre demande est confirmée.",
+    e_cancelled: "Cette demande est annulée.",
+    e_done: "Merci ! Cette demande est terminée.",
+    depositShort: "Acompte", remainingShort: "Reste à payer",
+    writeStudio: "Écrire au studio sur WhatsApp",
+    sentOn: "Envoyée le ",
+    badLink: "Lien de suivi incomplet : ouvrez le lien reçu après votre demande.",
+    notFound: "Demande introuvable : vérifiez le lien.",
+    months: ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+    wd: ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"],
+    wdLong: ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"],
+  },
+  ar: {
+    pageTitle: "الحجز",
+    intro: "استأجر الاستوديو بالساعة أو اترك لنا تصوير صورك وفيديوهاتك. يظهر السعر فورًا ودون أي التزام.",
+    howTitle: "كيف يعمل الحجز؟",
+    how1: "اختر الخدمة والخيارات التي تريدها: يُحسب السعر تلقائيًا.",
+    how2: "أرسل طلبك مع اسمك ورقم هاتفك.",
+    how3: "ادفع العربون: يتم تأكيد حجزك.",
+    provisional: "أسعار مؤقتة: قد تتغير قبل التأكيد.",
+    loading: "جارٍ تحميل الأسعار…",
+    chooseService: "1. اختر الخدمة",
+    tab_studio: "كراء الاستوديو", tabd_studio: "الاستوديو بالساعة لصورك أو فيديوهاتك.",
+    tab_product: "تصوير المنتجات", tabd_product: "نصوّر منتجاتك لمتجرك أو لصفحاتك على مواقع التواصل.",
+    tab_video: "فيديو", tabd_video: "ريلز وفيديوهات قصيرة يصوّرها فريقنا.",
+    tab_editing: "مونتاج", tabd_editing: "صوّرت بنفسك؟ نقوم بمونتاج الفيديو لك.",
+    tab_ad: "إعلان", tabd_ad: "إعلان كامل من الفكرة إلى التصوير. السعر حسب الطلب.",
+    studioH: "كراء الاستوديو",
+    studioDesc: "تستأجر الاستوديو المجهّز للمدة التي تختارها. يختلف السعر حسب الساعة واليوم.",
+    studioSteps: "اختر يومًا من التقويم، ثم المس ساعة البداية، ثم ساعة النهاية.",
+    prevMonth: "الشهر السابق", nextMonth: "الشهر التالي",
+    legFree: "متاح", legPart: "محجوز جزئيًا", legFull: "محجوز بالكامل", legSel: "اختيارك", legBooked: "محجوز",
+    chooseDay: "اختر يومًا",
+    optTitle: "الخيارات",
+    optHint: "اختر ما تريد: يتحدّث السعر مع كل اختيار.",
+    priceTitle: "تفاصيل السعر",
+    addCart: "أضف إلى طلبي",
+    productH: "تصوير المنتجات",
+    productDesc: "تسلّمنا منتجاتك ونصوّرها على خلفية نظيفة، جاهزة لمتجرك الإلكتروني أو لمواقع التواصل.",
+    packContent: "{n} منتج × {k} صور = {t} صورة في المجموع.",
+    pack: "الباقة", packHint: "كل باقة تضم عددًا من المنتجات وعددًا من الصور لكل منتج.",
+    extra: "صور إضافية", extraHint: "صور زيادة على صور الباقة ({p} للصورة).",
+    videoH: "تصوير فيديو",
+    videoDesc: "يصوّر فريقنا فيديوهاتك القصيرة (ريلز، تيك توك، ستوري) لتقديم علامتك أو منتجاتك.",
+    videoCount: "عدد الفيديوهات", videoFormat: "المقاس",
+    formatHint: "9:16 = عمودي (الهاتف، ريلز) · 16:9 = أفقي (يوتيوب، الشاشة).",
+    tiers: "تخفيض {p} % ابتداءً من {n} فيديوهات",
+    editingH: "مونتاج الفيديو",
+    editingDesc: "صوّرت بالفعل؟ أرسل لنا لقطاتك ونسلّمك فيديو جاهزًا (قصّ، موسيقى، نصوص).",
+    editDuration: "مدة الفيديو النهائي", editRev: "تعديلات إضافية",
+    revHint: "{n} تعديل مشمول. التعديل = مجموعة تصحيحات تطلبها منا.",
+    subs: "ترجمة مكتوبة على الفيديو (+{p})",
+    upTo: "حتى {d} — {p}",
+    adH: "إنتاج إعلاني",
+    adDesc: "السعر حسب الطلب: صف مشروعك ويرد عليك الاستوديو بالسعر.",
+    adBrief: "مشروعك",
+    adPh: "مثال: إعلان مدته 30 ثانية لعلامة عطور، تصوير في الاستوديو، مقاسان.",
+    cartH: "2. طلبك",
+    cartEmpty: "لا شيء بعد: اختر خدمة من الأعلى ثم «أضف إلى طلبي».",
+    remove: "حذف",
+    contactH: "3. معلوماتك",
+    contactHint: "يتصل بك الاستوديو على هذا الرقم (واتساب أو مكالمة).",
+    name: "الاسم واللقب", phone: "رقم الهاتف", note: "رسالة (اختياري)",
+    notePh: "توضيح، سؤال…",
+    send: "إرسال طلبي",
+    sendHint: "لا تدفع شيئًا الآن: يخبرك الاستوديو بطريقة دفع العربون.",
+    hold: "يبقى الموعد محجوزًا لك مدة {h} ساعة، حتى تدفع العربون.",
+    price: "السعر", onQuote: "حسب الطلب", subtotal: "المجموع الفرعي", total: "المجموع",
+    totalQuote: "حسب الطلب (يرسل لك الاستوديو السعر)",
+    deposit: "العربون المطلوب ({p} %)", remaining: "الباقي يُدفع في الاستوديو",
+    perHour: " / الساعة",
+    doneH: "تم إرسال الطلب ✓", doneCode: "رقم الطلب",
+    doneWaStep: "الخطوة الأخيرة: أرسل طلبك إلى الاستوديو عبر واتساب. الرسالة مكتوبة مسبقًا، يكفي أن تضغط «إرسال».",
+    doneWaBtn: "إرسال عبر واتساب",
+    doneKeep: "احتفظ بهذا الرابط لمتابعة طلبك:",
+    copy: "نسخ", copied: "تم النسخ ✓", openTrack: "فتح صفحة المتابعة", newReq: "طلب جديد",
+    payDeposit: "عربون بقيمة {p} يجب دفعه.",
+    sending: "جارٍ الإرسال…", needName: "اكتب اسمك.", emptyCart: "طلبك فارغ.",
+    slotTaken: "حجز شخص آخر هذا الموعد للتو (أو تغيّرت الأسعار). اختر موعدًا آخر.",
+    ratesChanged: "تم تحديث الأسعار للتو: أعد تحميل الصفحة ثم أرسل طلبك من جديد.",
+    sendFail: "تعذّر الإرسال: ", removeLine: " احذف السطر المعني.",
+    notPublished: "لم تُنشر الأسعار بعد. عد قريبًا.",
+    availLoading: "جارٍ تحميل المواعيد المتاحة…", availFail: "تعذّر تحميل المواعيد: ",
+    closedDay: "الاستوديو مغلق في هذا اليوم.",
+    openInfo: "مفتوح من {o} إلى {c} · الحد الأدنى {m}. الخانات الحمراء محجوزة.",
+    pastHour: "ساعة فائتة",
+    conflictEnd: "جزء من هذه الساعات محجوز: اختر نهاية أبكر أو بداية أخرى.",
+    needFree: "يجب أن تكون {d} على الأقل متاحة ابتداءً من {h}. اختر ساعة بداية أخرى.",
+    range: "من {a} إلى {b}",
+    rangeWaitEnd: " — المس خانة أخرى لاختيار ساعة النهاية.",
+    rangeRestart: " — المس خانة للبدء من جديد.",
+    pickStart: "المس ساعة البداية في قائمة الساعات.",
+    pickDayFirst: "اختر يومًا من التقويم أولًا.",
+    st_closed: "مغلق", st_past: "فات", st_full: "محجوز بالكامل", st_part: "محجوز جزئيًا", st_free: "متاح",
+    clientLang: "arabe",
+    trackTitle: "متابعة طلبي", trackLoading: "جارٍ التحميل…",
+    s_pending: "في انتظار العربون", s_confirmed: "مؤكَّد", s_cancelled: "ملغى", s_done: "منتهٍ",
+    e_expired: "انتهت مهلة دفع العربون: لم يعد الموعد مضمونًا. اتصل بالاستوديو.",
+    e_quote: "يدرس الاستوديو طلبك وسيرسل لك السعر.",
+    e_saved: "تم تسجيل طلبك.",
+    e_hold: " الموعد محجوز لك حتى {d}، حتى تدفع العربون.",
+    e_confirmed: "تم استلام العربون: طلبك مؤكَّد.",
+    e_cancelled: "تم إلغاء هذا الطلب.",
+    e_done: "شكرًا! انتهى هذا الطلب.",
+    depositShort: "العربون", remainingShort: "الباقي",
+    writeStudio: "راسل الاستوديو عبر واتساب",
+    sentOn: "أُرسل في ",
+    badLink: "رابط المتابعة ناقص: افتح الرابط الذي وصلك بعد طلبك.",
+    notFound: "الطلب غير موجود: تحقق من الرابط.",
+    months: ["جانفي", "فيفري", "مارس", "أفريل", "ماي", "جوان", "جويلية", "أوت", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"],
+    wd: ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"],
+    wdLong: ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"],
+  },
+  en: {
+    pageTitle: "Book",
+    intro: "Rent the studio by the hour or let us handle your photos and videos. The price shows right away, with no commitment.",
+    howTitle: "How does it work?",
+    how1: "Pick a service and your options: the price is calculated for you.",
+    how2: "Send your request with your name and phone number.",
+    how3: "Pay the deposit: your booking is confirmed.",
+    provisional: "Provisional prices: they may still change before confirmation.",
+    loading: "Loading prices…",
+    chooseService: "1. Choose a service",
+    tab_studio: "Studio rental", tabd_studio: "The studio by the hour, for your photos or videos.",
+    tab_product: "Product shoot", tabd_product: "We photograph your products for your shop or social media.",
+    tab_video: "Video", tabd_video: "Reels and short videos filmed by our team.",
+    tab_editing: "Editing", tabd_editing: "Already filmed? We edit your video.",
+    tab_ad: "Ad", tabd_ad: "A complete ad, from idea to shoot. Price on quote.",
+    studioH: "Studio rental",
+    studioDesc: "You rent the equipped studio for as long as you need. The price depends on the time and day.",
+    studioSteps: "Pick a day in the calendar, tap the start time, then the end time.",
+    prevMonth: "Previous month", nextMonth: "Next month",
+    legFree: "Free", legPart: "Partly booked", legFull: "Fully booked", legSel: "Your choice", legBooked: "Booked",
+    chooseDay: "Choose a day",
+    optTitle: "Options",
+    optHint: "Tick what you want: the price updates with each box.",
+    priceTitle: "Price details",
+    addCart: "Add to my request",
+    productH: "Product shoot",
+    productDesc: "Hand us your products and we photograph them on a clean background, ready for your online shop or social media.",
+    packContent: "{n} product(s) × {k} photo(s) = {t} photos in total.",
+    pack: "Pack", packHint: "Each pack includes a number of products and photos per product.",
+    extra: "Extra photos", extraHint: "Photos on top of those in the pack ({p} per photo).",
+    videoH: "Video shoot",
+    videoDesc: "Our team films your short videos (reels, TikTok, stories) to showcase your brand or products.",
+    videoCount: "Number of videos", videoFormat: "Format",
+    formatHint: "9:16 = vertical (phone, reels) · 16:9 = horizontal (YouTube, screens).",
+    tiers: "−{p} % from {n} videos",
+    editingH: "Video editing",
+    editingDesc: "Already filmed? Send us your footage and we deliver a finished video (cuts, music, text).",
+    editDuration: "Length of the final video", editRev: "Extra revisions",
+    revHint: "{n} revision(s) included. A revision = one round of changes you ask us for.",
+    subs: "Subtitles (+{p})",
+    upTo: "Up to {d} — {p}",
+    adH: "Advertising production",
+    adDesc: "On quote: describe your project and the studio replies with a price.",
+    adBrief: "Your project",
+    adPh: "E.g. a 30 s ad for a perfume brand, shot in the studio, 2 formats.",
+    cartH: "2. Your request",
+    cartEmpty: "Nothing yet: choose a service above, then “Add to my request”.",
+    remove: "Remove",
+    contactH: "3. Your details",
+    contactHint: "The studio will contact you on this number (WhatsApp or call).",
+    name: "Full name", phone: "Phone", note: "Message (optional)",
+    notePh: "A detail, a question…",
+    send: "Send my request",
+    sendHint: "Nothing is paid now: the studio tells you how to pay the deposit.",
+    hold: "The time slot is held for you for {h} h, while you pay the deposit.",
+    price: "Price", onQuote: "on quote", subtotal: "Subtotal", total: "Total",
+    totalQuote: "on quote (the studio sends you the price)",
+    deposit: "Deposit to pay ({p} %)", remaining: "Balance paid at the studio",
+    perHour: " / hour",
+    doneH: "Request sent ✓", doneCode: "Request no.",
+    doneWaStep: "Last step: send your request to the studio on WhatsApp. The message is already written, just press “Send”.",
+    doneWaBtn: "Send on WhatsApp",
+    doneKeep: "Keep this link to follow your request:",
+    copy: "Copy", copied: "Copied ✓", openTrack: "Open tracking page", newReq: "New request",
+    payDeposit: "Deposit of {p} to pay.",
+    sending: "Sending…", needName: "Please enter your name.", emptyCart: "Your request is empty.",
+    slotTaken: "Someone else just booked this time slot (or prices changed). Please choose another time.",
+    ratesChanged: "Prices were just updated: reload the page and send your request again.",
+    sendFail: "Could not send: ", removeLine: " Remove the line concerned.",
+    notPublished: "Prices are not published yet. Come back soon.",
+    availLoading: "Loading availability…", availFail: "Availability unavailable: ",
+    closedDay: "The studio is closed that day.",
+    openInfo: "Open from {o} to {c} · minimum {m}. Red boxes are already booked.",
+    pastHour: "Time passed",
+    conflictEnd: "Part of these hours is already booked: choose an earlier end or another start.",
+    needFree: "You need at least {d} free from {h}. Choose another start time.",
+    range: "From {a} to {b}",
+    rangeWaitEnd: " — tap another box to choose the end time.",
+    rangeRestart: " — tap a box to start again.",
+    pickStart: "Tap the start time in the list of hours.",
+    pickDayFirst: "First choose a day in the calendar.",
+    st_closed: "Closed", st_past: "Past", st_full: "Fully booked", st_part: "Partly booked", st_free: "Free",
+    clientLang: "anglais",
+    trackTitle: "Track my request", trackLoading: "Loading…",
+    s_pending: "Waiting for deposit", s_confirmed: "Confirmed", s_cancelled: "Cancelled", s_done: "Completed",
+    e_expired: "The deadline to pay the deposit has passed: the time slot is no longer guaranteed. Contact the studio.",
+    e_quote: "The studio is reviewing your request and will send you the price.",
+    e_saved: "Your request is saved.",
+    e_hold: " The time slot is held for you until {d}, while you pay the deposit.",
+    e_confirmed: "Deposit received: your request is confirmed.",
+    e_cancelled: "This request is cancelled.",
+    e_done: "Thank you! This request is completed.",
+    depositShort: "Deposit", remainingShort: "Balance",
+    writeStudio: "Message the studio on WhatsApp",
+    sentOn: "Sent on ",
+    badLink: "Incomplete tracking link: open the link you received after your request.",
+    notFound: "Request not found: check the link.",
+    months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    wd: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    wdLong: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  },
+};
+const dict = D[lang];
+
+/** Texte traduit, avec remplacement de {x}. */
+export function t(key, vars = {}) {
+  const s = dict[key] ?? D.fr[key] ?? key;
+  return typeof s === "string" ? s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? "")) : s;
+}
+
+/** Montant en dinars : « 1 500 DA », « 1 500 دج » en arabe (chiffres groupés avec un espace insécable). */
+export function money(n) {
+  const num = (n < 0 ? "−" : "") + Math.abs(n).toLocaleString("fr-FR").replace(/[\s ]/g, "\u00a0");
+  return AR ? ltr(num) + " دج" : num + " DA";
+}
+
+/** Durée lisible : 45 min, 1 h, 1 h 30. */
+export function duration(m) {
+  const h = Math.floor(m / 60), r = m % 60;
+  if (lang === "ar") return m < 60 ? `${m} دقيقة` : r ? `${h} ساعة و${r} دقيقة` : `${h} ساعة`;
+  return m < 60 ? `${m} min` : r ? `${h} h ${String(r).padStart(2, "0")}` : `${h} h`;
+}
+
+// Textes produits par le moteur de prix (lignes du prix, erreurs) : ils
+// restent en français dans la demande ; on les traduit seulement à l'affichage.
+const ENGINE = {
+  ar: [
+    [/^Location studio · (\S+) (\S+)–(\S+)$/, "كراء الاستوديو · $1 · $2–$3"],
+    [/^Tranche (\S+)–(\S+) · forfait /, "الفترة $1–$2 · سعر جزافي "],
+    [/date spéciale/, "تاريخ خاص"], [/tarif du jour/, "سعر اليوم"],
+    [/^Ajustement au prix minimum$/, "تعديل إلى الحد الأدنى للسعر"],
+    [/^Shooting produit · /, "تصوير المنتجات · "],
+    [/\((\d+) produits × (\d+) photos\)$/, "($1 منتجات × $2 صور)"],
+    [/^(\d+) photo\(s\) supplémentaire\(s\) × /, "$1 صورة إضافية × "],
+    [/^Remise de volume dès (\d+) vidéos \(−(\d+) %\)$/, "تخفيض الكمية ابتداءً من $1 فيديوهات (−$2 %)"],
+    [/^Shooting vidéo · (\d+) vidéo\(s\) /, "تصوير فيديو · $1 فيديو "],
+    [/^(\d+) vidéo\(s\) × /, "$1 فيديو × "],
+    [/^Vidéo (\d+) · jusqu'à (\d+) s · (\d+) révision\(s\) incluse\(s\)$/, "فيديو $1 · حتى $2 ثانية · $3 تعديل مشمول"],
+    [/^Vidéo (\d+) · sous-titres$/, "فيديو $1 · ترجمة مكتوبة"],
+    [/^Vidéo (\d+) · (\d+) révision\(s\) en plus$/, "فيديو $1 · $2 تعديل إضافي"],
+    [/^Montage vidéo · (\d+) vidéo\(s\)$/, "مونتاج فيديو · $1 فيديو"],
+    [/^Production publicitaire · sur devis$/, "إنتاج إعلاني · حسب الطلب"],
+    [/^Prix fixé par le studio après étude du projet$/, "يحدد الاستوديو السعر بعد دراسة مشروعك"],
+    [/\/h$/, " / الساعة"],
+    [/^Durée minimale : (\d+) minutes\.$/, "المدة الدنيا: $1 دقيقة."],
+    [/^La durée doit être un multiple de (\d+) minutes\.$/, "يجب أن تكون المدة من مضاعفات $1 دقيقة."],
+    [/^L'heure de début doit tomber sur une tranche de (\d+) minutes\.$/, "يجب أن تبدأ الساعة على فترة من $1 دقيقة."],
+    [/^Le studio est fermé ce jour-là\.$/, "الاستوديو مغلق في هذا اليوم."],
+    [/^Horaires d'ouverture ce jour-là : (.+) – (.+)\.$/, "أوقات العمل في هذا اليوم: $1 – $2."],
+    [/^Ce créneau est déjà passé\.$/, "هذا الموعد فات."],
+    [/^Une partie de ce créneau n'a pas de tarif : contactez le studio\.$/, "جزء من هذا الموعد بلا سعر: اتصل بالاستوديو."],
+    [/^Pack inconnu\.$/, "باقة غير معروفة."],
+    [/^Nombre de photos supplémentaires invalide\.$/, "عدد الصور الإضافية غير صالح."],
+    [/^Nombre de vidéos : entre 1 et (\d+)\.$/, "عدد الفيديوهات: بين 1 و$1."],
+    [/^Format vidéo invalide\.$/, "مقاس الفيديو غير صالح."],
+    [/^Nombre de vidéos à monter : entre 1 et (\d+)\.$/, "عدد الفيديوهات للمونتاج: بين 1 و$1."],
+    [/^Vidéo (\d+) : trop longue pour le tarif en ligne, demandez un devis\.$/, "الفيديو $1 طويل جدًا للسعر المعروض، اطلب عرض سعر."],
+    [/^Description du projet trop longue\.$/, "وصف المشروع طويل جدًا."],
+    [/^Le panier est vide\.$/, "طلبك فارغ."],
+    [/^Au plus (\d+) lignes par commande\.$/, "$1 أسطر كحد أقصى في الطلب."],
+    [/^La location du studio n'est pas disponible\.$/, "كراء الاستوديو غير متاح."],
+    [/^Le shooting produit n'est pas disponible\.$/, "تصوير المنتجات غير متاح."],
+    [/^Le shooting vidéo n'est pas disponible\.$/, "تصوير الفيديو غير متاح."],
+    [/^Le montage vidéo n'est pas disponible\.$/, "المونتاج غير متاح."],
+    [/^La production publicitaire n'est pas disponible\.$/, "الإنتاج الإعلاني غير متاح."],
+    [/^Deux réservations du panier se chevauchent\.$/, "حجزان في طلبك يتداخلان."],
+    [/^Option inconnue ou en double\.$/, "خيار غير معروف أو مكرر."],
+    [/^Options invalides\.$/, "خيارات غير صالحة."],
+    [/^Numéro de téléphone (manquant|invalide)\.$/, "رقم الهاتف غير صالح."],
+  ],
+  en: [
+    [/^Location studio · (\S+) (\S+)–(\S+)$/, "Studio rental · $1 $2–$3"],
+    [/^Tranche (\S+)–(\S+) · forfait /, "Time slot $1–$2 · flat rate "],
+    [/date spéciale/, "special date"], [/tarif du jour/, "today's rate"],
+    [/^Ajustement au prix minimum$/, "Minimum price adjustment"],
+    [/^Shooting produit · /, "Product shoot · "],
+    [/\((\d+) produits × (\d+) photos\)$/, "($1 products × $2 photos)"],
+    [/^(\d+) photo\(s\) supplémentaire\(s\) × /, "$1 extra photo(s) × "],
+    [/^Remise de volume dès (\d+) vidéos \(−(\d+) %\)$/, "Volume discount from $1 videos (−$2 %)"],
+    [/^Shooting vidéo · (\d+) vidéo\(s\) /, "Video shoot · $1 video(s) "],
+    [/^(\d+) vidéo\(s\) × /, "$1 video(s) × "],
+    [/^Vidéo (\d+) · jusqu'à (\d+) s · (\d+) révision\(s\) incluse\(s\)$/, "Video $1 · up to $2 s · $3 revision(s) included"],
+    [/^Vidéo (\d+) · sous-titres$/, "Video $1 · subtitles"],
+    [/^Vidéo (\d+) · (\d+) révision\(s\) en plus$/, "Video $1 · $2 extra revision(s)"],
+    [/^Montage vidéo · (\d+) vidéo\(s\)$/, "Video editing · $1 video(s)"],
+    [/^Production publicitaire · sur devis$/, "Advertising production · on quote"],
+    [/^Prix fixé par le studio après étude du projet$/, "Price set by the studio after reviewing your project"],
+    [/\/h$/, " / hour"],
+    [/^Durée minimale : (\d+) minutes\.$/, "Minimum duration: $1 minutes."],
+    [/^La durée doit être un multiple de (\d+) minutes\.$/, "The duration must be a multiple of $1 minutes."],
+    [/^L'heure de début doit tomber sur une tranche de (\d+) minutes\.$/, "The start time must fall on a $1-minute slot."],
+    [/^Le studio est fermé ce jour-là\.$/, "The studio is closed that day."],
+    [/^Horaires d'ouverture ce jour-là : (.+) – (.+)\.$/, "Opening hours that day: $1 – $2."],
+    [/^Ce créneau est déjà passé\.$/, "This time slot has already passed."],
+    [/^Une partie de ce créneau n'a pas de tarif : contactez le studio\.$/, "Part of this time slot has no price: contact the studio."],
+    [/^Pack inconnu\.$/, "Unknown pack."],
+    [/^Nombre de photos supplémentaires invalide\.$/, "Invalid number of extra photos."],
+    [/^Nombre de vidéos : entre 1 et (\d+)\.$/, "Number of videos: between 1 and $1."],
+    [/^Format vidéo invalide\.$/, "Invalid video format."],
+    [/^Nombre de vidéos à monter : entre 1 et (\d+)\.$/, "Number of videos to edit: between 1 and $1."],
+    [/^Vidéo (\d+) : trop longue pour le tarif en ligne, demandez un devis\.$/, "Video $1 is too long for the online price: ask for a quote."],
+    [/^Description du projet trop longue\.$/, "Project description too long."],
+    [/^Le panier est vide\.$/, "Your request is empty."],
+    [/^Au plus (\d+) lignes par commande\.$/, "At most $1 lines per request."],
+    [/^La location du studio n'est pas disponible\.$/, "Studio rental is not available."],
+    [/^Le shooting produit n'est pas disponible\.$/, "Product shoots are not available."],
+    [/^Le shooting vidéo n'est pas disponible\.$/, "Video shoots are not available."],
+    [/^Le montage vidéo n'est pas disponible\.$/, "Video editing is not available."],
+    [/^La production publicitaire n'est pas disponible\.$/, "Advertising production is not available."],
+    [/^Deux réservations du panier se chevauchent\.$/, "Two bookings in your request overlap."],
+    [/^Option inconnue ou en double\.$/, "Unknown or duplicate option."],
+    [/^Options invalides\.$/, "Invalid options."],
+    [/^Numéro de téléphone (manquant|invalide)\.$/, "Invalid phone number."],
+  ],
+};
+
+/** Traduit un libellé ou une erreur du moteur de prix (le reste est gardé tel quel). */
+export function tr(text) {
+  let s = String(text ?? "");
+  for (const [re, to] of ENGINE[lang] || []) s = s.replace(re, to);
+  if (AR) {
+    // Montants « 1 500 DA » → « 1 500 دج », heures « 14:00–15:00 » lisibles de gauche à droite.
+    s = s.replace(/(−?\d{1,3}(?:[ \u00a0 ]\d{3})*) DA/g, (_, n) => ltr(n.replace(/[  ]/g, "\u00a0")) + " دج");
+    s = s.replace(/\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}/g, (m) => ltr(m));
+    s = s.replace(/\d{4}-\d{2}-\d{2}/g, (m) => ltr(m));
+  }
+  return s;
+}
+
+/** Applique la langue à la page : lang, dir, textes data-i18n, et les boutons de langue. */
+export function applyPage(switcher) {
+  document.documentElement.lang = lang;
+  document.documentElement.dir = AR ? "rtl" : "ltr";
+  document.querySelectorAll("[data-i18n]").forEach((e) => (e.textContent = t(e.dataset.i18n)));
+  document.querySelectorAll("[data-i18n-ph]").forEach((e) => (e.placeholder = t(e.dataset.i18nPh)));
+  document.querySelectorAll("[data-i18n-aria]").forEach((e) => e.setAttribute("aria-label", t(e.dataset.i18nAria)));
+  if (!switcher) return;
+  switcher.replaceChildren(...LANGS.map(([id, label]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.lang = id; b.textContent = label;
+    b.setAttribute("aria-pressed", String(id === lang));
+    b.onclick = () => {
+      try { localStorage.setItem("studio-lang", id); } catch { /* navigation privée */ }
+      const u = new URL(location.href);
+      u.searchParams.delete("lang");
+      location.replace(u.href); // même adresse : le panier et la page de suivi sont gardés
+    };
+    return b;
+  }));
+}
