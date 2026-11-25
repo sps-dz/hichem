@@ -155,7 +155,7 @@
 
 <script type="module">
   import { app, db, usingEmulator, trackingUrl } from "../lib/firebase.js";
-  import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+  import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
   import { collection, doc, getDoc, getDocs, limit, orderBy, query, where, writeBatch, runTransaction, serverTimestamp, deleteDoc, deleteField } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
   import { DEFAULT_CATALOG, assertCatalog, studioFromGrid, gridFromStudio, normalizeDzPhone, percentOfDzd, verifyOrderPricing, whatsappLink, staffWhatsappText, shortCode, formatRef, fmtDA, algiersLabel, utcMsToAlgiers } from "../lib/studio-core.js";
 
@@ -184,7 +184,21 @@
   }
 
   // ---------- Connexion ----------
-  $("google").onclick = (e) => busy(e.target, () => signInWithPopup(auth, new GoogleAuthProvider()));
+  $("google").onclick = (e) => busy(e.target, async () => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" }); // toujours choisir le compte
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      // Fenêtre bloquée par le navigateur : on passe par une redirection.
+      if (err?.code === "auth/popup-blocked" || err?.code === "auth/operation-not-supported-in-this-environment") return signInWithRedirect(auth, provider);
+      if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") return show("Connexion Google annulée.", true);
+      if (err?.code === "auth/unauthorized-domain") return show("Ce site n'est pas autorisé dans Firebase : Authentication → Paramètres → Domaines autorisés → ajouter " + location.hostname + ".", true);
+      if (err?.code === "auth/operation-not-allowed") return show("La connexion Google n'est pas activée : Firebase → Authentication → Méthodes de connexion → Google.", true);
+      throw err;
+    }
+  });
+  getRedirectResult(auth).catch(fail);
   $("emailLogin").onclick = (e) => busy(e.target, () => signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value));
   $("emailSignup").onclick = (e) => busy(e.target, async () => {
     const cred = await createUserWithEmailAndPassword(auth, $("email").value.trim(), $("password").value);
@@ -580,6 +594,22 @@
     $("signedOut").hidden = !!user;
     me = null;
     if (!user) return;
+    // Session sans e-mail (ancienne connexion anonyme du même site, par exemple) :
+    // elle ne peut pas servir ici, on la ferme pour laisser se connecter avec Google.
+    if (!user.email) {
+      const providers = user.providerData.map((p) => p.providerId);
+      const how = user.isAnonymous ? "anonyme" : (providers.join(", ") || "inconnue");
+      const uid = user.uid;
+      await signOut(auth);
+      if (providers.includes("google.com")) {
+        // Compte Google rattaché autrefois à un compte anonyme, resté sans e-mail principal.
+        show(`Ce compte Google est rattaché à un ancien compte Firebase sans e-mail (identifiant ${uid}).\n` +
+          "Solution : console Firebase → Authentication → Utilisateurs → chercher cet identifiant → Supprimer le compte, puis se reconnecter ici avec Google.", true);
+      } else {
+        show(`Une ancienne session sans e-mail (connexion ${how}, identifiant ${uid}) était ouverte dans ce navigateur : elle a été fermée. Connectez-vous avec Google.`, true);
+      }
+      return;
+    }
     $("signedIn").hidden = false;
     $("me").textContent = user.email || user.uid;
     if (!user.emailVerified) { $("verifyInfo").hidden = false; $("myRole").textContent = "aucun"; return; }
