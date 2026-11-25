@@ -510,8 +510,11 @@
     $("dLink").value = url;
     $("dOpen").href = url;
     if (contact.whatsapp) {
-      $("dWaLink").href = whatsappLink(contact.whatsapp, clientWhatsappText({ code: shortCode(orderId), name, pricing, trackingUrl: url }));
-      $("dWhatsapp").hidden = false;
+      // Le message contient toujours le lien de suivi (sinon pas de bouton : le lien reste affiché plus bas).
+      try {
+        $("dWaLink").href = whatsappLink(contact.whatsapp, clientWhatsappText({ code: shortCode(orderId), name, pricing, trackingUrl: url }));
+        $("dWhatsapp").hidden = false;
+      } catch (e) { show(e.message || String(e), true); }
     }
     const pay = [contact.depositNote, contact.baridimob && "BaridiMob : " + contact.baridimob, contact.ccp && "CCP : " + contact.ccp].filter(Boolean);
     if (pricing.deposit && pay.length) { $("dPay").textContent = `Acompte de ${fmtDA(pricing.deposit)} à verser.\n` + pay.join("\n"); $("dPay").hidden = false; }

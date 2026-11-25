@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { DEFAULT_CATALOG, Catalog } from "../src/pricing/catalog";
 import { priceCart } from "../src/pricing/engine";
 import {
-  buildClientOrder, clientWhatsappText, formatRef, randomId, shortCode, slotsByDay, staffWhatsappText, verifyOrderPricing, whatsappLink,
+  buildClientOrder, clientWhatsappText, formatRef, paymentWhatsappText, randomId, shortCode, slotsByDay, staffWhatsappText, verifyOrderPricing, whatsappLink,
 } from "../src/web/studio-core";
 import { T0 } from "./helpers";
 
@@ -37,9 +37,17 @@ test("message WhatsApp du client : demande, lignes, total, acompte et lien de su
   assert.match(t, /Demande n° ABC123 — Amine K\./);
   assert.match(t, /Location studio · 2026-12-07 16:00–18:00 : 5 300 DA/); // 2 000 + 2 500 + iPhone 800
   assert.match(t, /Total : 17 300 DA — acompte 20 % : 3 460 DA/);
-  assert.match(t, /Suivi : https:\/\/studio\.dz\/suivi\.html\?t=x/);
+  // Le lien de suivi est toujours là, juste après le numéro de la demande.
+  assert.equal(t.split("\n")[2], "Lien de suivi de ma demande : https://studio.dz/suivi.html?t=x");
   const q = priceCart(cat(), [{ service: "ad", brief: "Pub" }], NOW);
-  assert.match(clientWhatsappText({ code: "X", name: "A", pricing: q, trackingUrl: "u" }), /Total : sur devis/);
+  assert.match(clientWhatsappText({ code: "X", name: "A", pricing: q, trackingUrl: "https://studio.dz/suivi.html?t=y" }), /Total : sur devis/);
+  // Sans lien de suivi valable, pas de message.
+  for (const bad of ["", "u", "https://studio.dz/", "suivi.html?t=x"]) {
+    assert.throws(() => clientWhatsappText({ code: "X", name: "A", pricing: q, trackingUrl: bad }), /Lien de suivi manquant/);
+  }
+  assert.match(paymentWhatsappText({ name: "Amine", code: "ABC123", ref: "STU-2026-000001", kind: "deposit", amount: 3460, remaining: 13840, trackingUrl: "https://s/suivi.html?t=x" }),
+    /^Bonjour Amine, nous avons bien reçu votre acompte de 3 460 DA pour votre STU-2026-000001 \(demande ABC123\) : elle est confirmée\. Reste à payer : 13 840 DA\.\nSuivi : https:\/\/s\/suivi\.html\?t=x$/);
+  assert.match(paymentWhatsappText({ name: "A", code: "X", kind: "balance", amount: 5000, trackingUrl: "u" }), /paiement de 5 000 DA pour votre demande n° X\. Merci/);
   assert.match(staffWhatsappText({ name: "Amine", code: "ABC123", ref: "STU-2026-000001", status: "confirmed", total: 17300, deposit: 3460, trackingUrl: "u" }), /confirmée\. Reste à payer : 13 840 DA/);
 });
 

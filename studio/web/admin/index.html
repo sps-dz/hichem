@@ -78,7 +78,7 @@
     <h2>Encaissements</h2>
     <p class="mute small">Chiffre d'affaires compté à l'encaissement (acomptes et restes saisis ici).</p>
     <div class="tablewrap"><table>
-      <thead><tr><th>Date</th><th>Demande</th><th>Type</th><th>Moyen</th><th style="text-align:right">Montant</th></tr></thead>
+      <thead><tr><th>Date</th><th>Client</th><th>Type</th><th>Moyen</th><th style="text-align:right">Montant</th></tr></thead>
       <tbody id="payRows"></tbody>
     </table></div>
   </section>
@@ -175,7 +175,7 @@
   import { app, db, usingEmulator, trackingUrl } from "../lib/firebase.js";
   import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
   import { collection, doc, getDoc, getDocs, limit, orderBy, query, where, writeBatch, runTransaction, serverTimestamp, deleteDoc, deleteField } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
-  import { DEFAULT_CATALOG, assertCatalog, studioFromGrid, gridFromStudio, normalizeDzPhone, percentOfDzd, verifyOrderPricing, whatsappLink, staffWhatsappText, shortCode, formatRef, fmtDA, algiersLabel, utcMsToAlgiers } from "../lib/studio-core.js";
+  import { DEFAULT_CATALOG, assertCatalog, studioFromGrid, gridFromStudio, normalizeDzPhone, percentOfDzd, verifyOrderPricing, whatsappLink, staffWhatsappText, paymentWhatsappText, shortCode, formatRef, fmtDA, algiersLabel, utcMsToAlgiers } from "../lib/studio-core.js";
 
   // Doit être identique à bootstrapEmails() dans firestore.rules.
   const BOOTSTRAP_EMAILS = ["comptppl@gmail.com"];
@@ -440,9 +440,24 @@
 
   async function loadPayments() {
     const snap = await getDocs(query(collection(db, "payments"), orderBy("recordedAt", "desc"), limit(100)));
+    // Les encaissements ne gardent pas le téléphone : on le lit dans la demande (une lecture par demande).
+    const ids = [...new Set(snap.docs.map((d) => d.data().orderId).filter(Boolean))];
+    const orders = new Map(await Promise.all(ids.map(async (id) => [id, await getDoc(doc(db, "orders", id)).then((s) => (s.exists() ? s.data() : null)).catch(() => null)])));
+    const clientCell = (p) => {
+      const o = orders.get(p.orderId);
+      const label = p.ref || shortCode(p.orderId);
+      if (!o?.customer?.phone) return el("td", { textContent: label });
+      const pr = o.pricing || {};
+      const text = paymentWhatsappText({ name: o.customer.name.split(" ")[0], code: shortCode(p.orderId), ref: o.ref || p.ref, kind: p.kind, amount: p.amount,
+        remaining: pr.total != null && pr.deposit ? pr.total - pr.deposit : null, trackingUrl: trackingUrl(o.trackingToken) });
+      let href = "";
+      try { href = whatsappLink(o.customer.phone, text); } catch { return el("td", { textContent: label }); }
+      const wa = el("a", { className: "button whatsapp small", href, target: "_blank", rel: "noopener", textContent: "WhatsApp · " + o.customer.name, title: label + " · " + o.customer.phone });
+      return el("td", {}, wa);
+    };
     $("payRows").replaceChildren(...snap.docs.map((d) => {
       const p = d.data();
-      return el("tr", {}, el("td", { textContent: p.recordedAt ? algiersLabel(p.recordedAt.toMillis()) : "" }), el("td", { textContent: p.ref || shortCode(p.orderId) }),
+      return el("tr", {}, el("td", { textContent: p.recordedAt ? algiersLabel(p.recordedAt.toMillis()) : "" }), clientCell(p),
         el("td", { textContent: { deposit: "Acompte", balance: "Reste", refund: "Remboursement" }[p.kind] }), el("td", { textContent: METHOD_LABEL[p.method] }),
         el("td", { textContent: fmtDA(p.amount), style: "text-align:right" }));
     }));

@@ -65,8 +65,21 @@ export interface OrderDraft {
   holdExpiresAtMs: number | null;
 }
 
-/** Message que le client envoie au studio sur WhatsApp, après sa demande. */
+/** Le lien de suivi est obligatoire dans les messages WhatsApp : adresse web complète exigée. */
+function assertTrackingUrl(url: string): string {
+  if (typeof url !== "string" || !/^https?:\/\/\S+suivi\.html\?t=[A-Za-z0-9]+$/.test(url)) {
+    throw new AppError("invalid-argument", "Lien de suivi manquant : message WhatsApp impossible.");
+  }
+  return url;
+}
+
+/**
+ * Message que le client envoie au studio sur WhatsApp, après sa demande.
+ * Le lien de suivi vient juste après le numéro de la demande, pour qu'il
+ * figure toujours dans le message, même avec beaucoup de lignes.
+ */
 export function clientWhatsappText(d: { code: string; name: string; pricing: Pricing; trackingUrl: string }): string {
+  const url = assertTrackingUrl(d.trackingUrl);
   const lines = d.pricing.lines.map((l) => `• ${l.label}${l.price === null ? " (sur devis)" : ` : ${fmtDA(l.price)}`}`);
   const money =
     d.pricing.total === null
@@ -75,9 +88,10 @@ export function clientWhatsappText(d: { code: string; name: string; pricing: Pri
   return [
     "Bonjour, je viens d'envoyer une demande sur le site du studio.",
     `Demande n° ${d.code} — ${d.name}`,
+    `Lien de suivi de ma demande : ${url}`,
+    "",
     ...lines,
     money,
-    `Suivi : ${d.trackingUrl}`,
   ].join("\n");
 }
 
@@ -91,6 +105,17 @@ export function staffWhatsappText(d: { name: string; code: string; ref?: string 
     done: `merci ! Votre ${who} est terminée.`,
   };
   return `Bonjour ${d.name}, ${body[d.status] ?? `votre ${who} : ${d.status}.`}\nSuivi : ${d.trackingUrl}`;
+}
+
+/** Message de l'équipe au client après un encaissement (acompte, reste, remboursement). */
+export function paymentWhatsappText(d: { name: string; code: string; ref?: string | null; kind: string; amount: number; remaining?: number | null; trackingUrl: string }): string {
+  const who = d.ref ? `${d.ref} (demande ${d.code})` : `demande n° ${d.code}`;
+  const body: Record<string, string> = {
+    deposit: `nous avons bien reçu votre acompte de ${fmtDA(d.amount)} pour votre ${who} : elle est confirmée.${d.remaining ? ` Reste à payer : ${fmtDA(d.remaining)}.` : ""}`,
+    balance: `nous avons bien reçu votre paiement de ${fmtDA(d.amount)} pour votre ${who}. Merci !`,
+    refund: `nous vous avons remboursé ${fmtDA(d.amount)} pour votre ${who}.`,
+  };
+  return `Bonjour ${d.name}, ${body[d.kind] ?? `paiement de ${fmtDA(d.amount)} pour votre ${who}.`}\nSuivi : ${d.trackingUrl}`;
 }
 
 /** Tranches « AAAA-MM-JJ_HHMM » → { 'AAAA-MM-JJ': ['HHMM', …] } (un document days/ par date). */

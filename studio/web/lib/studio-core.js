@@ -801,15 +801,23 @@ function whatsappLink(phone, text2) {
   const digits = phone.startsWith("213") && /^\d+$/.test(phone) ? phone : normalizeDzPhone(phone).e164.slice(1);
   return `https://wa.me/${digits}?text=${encodeURIComponent(text2)}`;
 }
+function assertTrackingUrl(url) {
+  if (typeof url !== "string" || !/^https?:\/\/\S+suivi\.html\?t=[A-Za-z0-9]+$/.test(url)) {
+    throw new AppError("invalid-argument", "Lien de suivi manquant : message WhatsApp impossible.");
+  }
+  return url;
+}
 function clientWhatsappText(d) {
+  const url = assertTrackingUrl(d.trackingUrl);
   const lines = d.pricing.lines.map((l) => `\u2022 ${l.label}${l.price === null ? " (sur devis)" : ` : ${fmtDA(l.price)}`}`);
   const money = d.pricing.total === null ? "Total : sur devis" : `Total : ${fmtDA(d.pricing.total)} \u2014 acompte ${d.pricing.depositPercent} % : ${fmtDA(d.pricing.deposit)}`;
   return [
     "Bonjour, je viens d'envoyer une demande sur le site du studio.",
     `Demande n\xB0 ${d.code} \u2014 ${d.name}`,
+    `Lien de suivi de ma demande : ${url}`,
+    "",
     ...lines,
-    money,
-    `Suivi : ${d.trackingUrl}`
+    money
   ].join("\n");
 }
 function staffWhatsappText(d) {
@@ -821,6 +829,16 @@ function staffWhatsappText(d) {
     done: `merci ! Votre ${who} est termin\xE9e.`
   };
   return `Bonjour ${d.name}, ${body[d.status] ?? `votre ${who} : ${d.status}.`}
+Suivi : ${d.trackingUrl}`;
+}
+function paymentWhatsappText(d) {
+  const who = d.ref ? `${d.ref} (demande ${d.code})` : `demande n\xB0 ${d.code}`;
+  const body = {
+    deposit: `nous avons bien re\xE7u votre acompte de ${fmtDA(d.amount)} pour votre ${who} : elle est confirm\xE9e.${d.remaining ? ` Reste \xE0 payer : ${fmtDA(d.remaining)}.` : ""}`,
+    balance: `nous avons bien re\xE7u votre paiement de ${fmtDA(d.amount)} pour votre ${who}. Merci !`,
+    refund: `nous vous avons rembours\xE9 ${fmtDA(d.amount)} pour votre ${who}.`
+  };
+  return `Bonjour ${d.name}, ${body[d.kind] ?? `paiement de ${fmtDA(d.amount)} pour votre ${who}.`}
 Suivi : ${d.trackingUrl}`;
 }
 function slotsByDay(keys) {
@@ -894,6 +912,7 @@ export {
   formatRef,
   gridFromStudio,
   normalizeDzPhone,
+  paymentWhatsappText,
   percentOfDzd,
   priceCart,
   randomId,
