@@ -21,8 +21,11 @@ jobs:
       - name: Fonctions — installation
         run: npm ci
         working-directory: studio/functions
-      - name: Fonctions — tests (anti-chevauchement, rôles, audit, argent)
+      - name: Fonctions — tests (prix, forfait, code partagé des pages)
         run: npm test
+        working-directory: studio/functions
+      - name: Pages — studio-core.js à jour avec le code source
+        run: npm run build:web && git diff --exit-code -- ../web/lib/studio-core.js
         working-directory: studio/functions
       - name: Règles — installation
         run: npm ci && npm i -g firebase-tools@14.27.0

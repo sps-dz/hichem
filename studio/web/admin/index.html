@@ -3,67 +3,84 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Studio — Équipe</title>
+<link rel="stylesheet" href="../lib/studio.css">
 <style>
-  :root { --bg:#f6f5f2; --card:#fff; --ink:#1d1d1b; --mute:#6b6a66; --line:#e3e1dc; --accent:#1f5f4a; --bad:#a3322a; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#151514; --card:#1f1f1d; --ink:#eeede9; --mute:#9d9b95; --line:#33322f; --accent:#6cc3a2; --bad:#e2857c; } }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  h2 { font-size: 16px; margin: 0 0 12px; }
-  p.mute, .mute { color: var(--mute); }
-  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
-  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button:disabled { opacity: .5; cursor: default; }
-  input, select { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  main { max-width: 980px; }
   .row { display: grid; grid-template-columns: 1fr 1fr 140px auto; gap: 8px; align-items: end; }
   @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
-  label { font-size: 13px; color: var(--mute); display: grid; gap: 4px; }
-  table { width: 100%; border-collapse: collapse; }
-  td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  th { font-size: 13px; color: var(--mute); font-weight: 500; }
-  .msg { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg); white-space: pre-wrap; word-break: break-word; }
-  .msg.bad { color: var(--bad); }
-  .tablewrap { overflow-x: auto; }
   .rates input { width: 92px; text-align: right; padding: 6px 8px; }
   .rates input.hm { width: 76px; text-align: center; }
   .rates th, .rates td { padding: 6px 4px; white-space: nowrap; }
-  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  @media (max-width: 640px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .optrow { display: grid; grid-template-columns: 1fr 120px auto; gap: 8px; margin-bottom: 8px; }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  [hidden] { display: none !important; }
+  .order { border-top: 1px solid var(--line); padding: 12px 0; }
+  .order:first-child { border-top: 0; }
+  .order .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+  .order .warn { color: var(--bad); font-size: 13px; white-space: pre-wrap; }
+  .order .ok { color: var(--accent); font-size: 13px; }
+  .inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
+  .inline input, .inline select { width: auto; }
 </style>
 </head>
 <body>
 <main>
   <h1>Studio — Équipe</h1>
-  <p class="mute">Comptes et rôles de l'équipe. Toutes les actions sont vérifiées par le serveur et notées dans le journal d'audit.</p>
+  <p class="mute">Demandes des clients, acomptes, équipe et tarifs. Chaque action est notée dans le journal d'audit.</p>
 
   <section id="signedOut">
     <h2>Connexion</h2>
-    <p class="mute">Connecte-toi avec ton compte Google (e-mail vérifié), ou avec l'e-mail et le mot de passe reçus de l'admin.</p>
+    <p class="mute">Avec votre compte Google, ou avec un e-mail et un mot de passe (l'e-mail doit être vérifié).</p>
     <button class="primary" id="google">Se connecter avec Google</button>
     <div style="display:grid; gap:8px; margin-top:12px; max-width:360px">
       <input id="email" type="email" placeholder="E-mail" autocomplete="username">
-      <input id="password" type="password" placeholder="Mot de passe" autocomplete="current-password">
-      <button id="emailLogin">Se connecter</button>
+      <input id="password" type="password" placeholder="Mot de passe (8 caractères minimum)" autocomplete="current-password">
+      <div class="actions" style="margin:0"><button id="emailLogin">Se connecter</button><button id="emailSignup">Créer mon compte</button><button id="emailReset" class="link">Mot de passe oublié</button></div>
     </div>
   </section>
 
   <section id="signedIn" hidden>
     <h2>Mon compte</h2>
     <p><span id="me"></span> — rôle : <strong id="myRole">aucun</strong></p>
-    <button id="bootstrap" class="primary" hidden>Devenir administrateur</button>
-    <button id="logout">Se déconnecter</button>
+    <p id="verifyInfo" class="note" hidden>Votre e-mail n'est pas encore vérifié : ouvrez le lien reçu par e-mail, puis rechargez cette page. <button id="resendVerify" class="link">Renvoyer l'e-mail</button></p>
+    <p id="noAccess" class="mute" hidden>Ce compte n'a pas encore accès. Demandez à l'administrateur de vous inviter avec cette adresse e-mail.</p>
+    <div class="actions">
+      <button id="bootstrap" class="primary" hidden>Devenir administrateur</button>
+      <button id="join" class="primary" hidden>Rejoindre l'équipe</button>
+      <button id="logout">Se déconnecter</button>
+    </div>
+  </section>
+
+  <section id="ordersPanel" hidden>
+    <h2>Demandes des clients</h2>
+    <div class="inline" style="margin:0 0 8px">
+      <label>Afficher<select id="oFilter">
+        <option value="pending">En attente de l'acompte</option>
+        <option value="confirmed">Confirmées</option>
+        <option value="done">Terminées</option>
+        <option value="cancelled">Annulées</option>
+        <option value="">Toutes (50 dernières)</option>
+      </select></label>
+      <button id="oReload">Actualiser</button>
+    </div>
+    <p id="expiredBox" class="note" hidden><span id="expiredCount"></span> demande(s) n'ont pas versé l'acompte dans le délai : leur créneau reste bloqué. <button id="releaseExpired">Annuler et libérer les créneaux</button></p>
+    <div id="orders"></div>
+  </section>
+
+  <section id="paymentsPanel" hidden>
+    <h2>Encaissements</h2>
+    <p class="mute small">Chiffre d'affaires compté à l'encaissement (acomptes et restes saisis ici).</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Date</th><th>Demande</th><th>Type</th><th>Moyen</th><th style="text-align:right">Montant</th></tr></thead>
+      <tbody id="payRows"></tbody>
+    </table></div>
   </section>
 
   <section id="adminPanel" hidden>
-    <h2>Ajouter un membre</h2>
+    <h2>Inviter un membre</h2>
+    <p class="mute small">La personne se connecte ensuite sur cette page avec cette adresse (Google, ou « Créer mon compte »), puis appuie sur « Rejoindre l'équipe ».</p>
     <div class="row">
-      <label>Nom<input id="newName" placeholder="Amel B."></label>
+      <label>Nom<input id="newName" placeholder="Amel B." maxlength="80"></label>
       <label>E-mail<input id="newEmail" type="email" placeholder="amel@exemple.com"></label>
       <label>Rôle
         <select id="newRole">
@@ -72,16 +89,34 @@
           <option value="admin">Administrateur</option>
         </select>
       </label>
-      <button class="primary" id="create">Créer</button>
+      <button class="primary" id="invite">Inviter</button>
     </div>
-    <h2 style="margin-top:20px">Tarifs</h2>
-    <p class="mute" id="catalogInfo">Chargement…</p>
-    <button id="seedCatalog" hidden>Publier les tarifs provisoires</button>
     <h2 style="margin-top:20px">Équipe</h2>
     <div class="tablewrap"><table>
       <thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>État</th><th></th></tr></thead>
       <tbody id="staffRows"></tbody>
     </table></div>
+    <h2 style="margin-top:20px">Invitations en attente</h2>
+    <div class="tablewrap"><table><tbody id="inviteRows"></tbody></table></div>
+
+    <h2 style="margin-top:20px">Coordonnées affichées aux clients</h2>
+    <div class="grid3">
+      <label>Nom du studio<input id="kName" maxlength="80"></label>
+      <label>WhatsApp du studio<input id="kWhatsapp" type="tel" placeholder="0555 12 34 56"></label>
+      <label>Délai pour verser l'acompte (heures)<input id="kHold" type="number" min="1" max="72" value="24"></label>
+      <label>BaridiMob (RIP)<input id="kBaridi" maxlength="80"></label>
+      <label>CCP<input id="kCcp" maxlength="80"></label>
+      <label>Consigne de paiement<input id="kNote" maxlength="300" placeholder="Envoyez la capture du versement sur WhatsApp."></label>
+    </div>
+    <button class="primary" id="saveContact" style="margin-top:12px">Enregistrer</button>
+
+    <h2 style="margin-top:20px">Tarifs</h2>
+    <p class="mute" id="catalogInfo">Chargement…</p>
+    <button id="seedCatalog" hidden>Publier les tarifs provisoires</button>
+
+    <h2 style="margin-top:20px">Sauvegarde</h2>
+    <p class="mute small">Le forfait gratuit n'a pas de sauvegarde automatique : téléchargez une copie de la base (fichier JSON) régulièrement, par exemple chaque semaine.</p>
+    <button id="exportDb">Télécharger une sauvegarde</button>
   </section>
 
   <section id="ratesPanel" hidden>
@@ -108,7 +143,7 @@
       <label>Temps entre deux réservations (min)<input id="bufferMinutes" type="number" min="0" step="5"></label>
       <label>Prix minimum (DA)<input id="minPrice" type="number" min="0" step="100"></label>
     </div>
-    <label style="display:flex; gap:8px; align-items:center; margin-top:12px; color:var(--ink)"><input id="provisional" type="checkbox" style="width:auto"> Tarifs provisoires</label>
+    <label class="check" style="margin-top:12px"><input id="provisional" type="checkbox"> Tarifs provisoires</label>
     <div class="actions">
       <button class="primary" id="publishRates">Publier les nouveaux tarifs</button>
       <button id="resetRates">Annuler mes modifications</button>
@@ -119,136 +154,375 @@
 </main>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-  import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
-  import { getFirestore, collection, getDocs, orderBy, query, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
-  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js";
+  import { app, db, usingEmulator, trackingUrl } from "../lib/firebase.js";
+  import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+  import { collection, doc, getDoc, getDocs, limit, orderBy, query, where, writeBatch, runTransaction, serverTimestamp, deleteDoc, deleteField } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+  import { DEFAULT_CATALOG, assertCatalog, studioFromGrid, gridFromStudio, normalizeDzPhone, percentOfDzd, verifyOrderPricing, whatsappLink, staffWhatsappText, shortCode, formatRef, fmtDA, algiersLabel, utcMsToAlgiers } from "../lib/studio-core.js";
 
-  // À remplir avec la configuration du projet Firebase du studio
-  // (Console Firebase → Paramètres du projet → Vos applications → Application Web).
-  const firebaseConfig = {
-    apiKey: "AIzaSyBIrjOoXsXqJh5_Dh2LrfFfT-132VFFW5I",
-    authDomain: "sponsorhichem.firebaseapp.com",
-    projectId: "sponsorhichem",
-    storageBucket: "sponsorhichem.firebasestorage.app",
-    messagingSenderId: "499965988228",
-    appId: "1:499965988228:web:21f6a573fd08767e5c61d1",
-  };
+  // Doit être identique à bootstrapEmails() dans firestore.rules.
+  const BOOTSTRAP_EMAILS = ["comptppl@gmail.com"];
+  const ROLE_LABEL = { admin: "Administrateur", employee: "Employé", accountant: "Comptable" };
+  const STATUS_LABEL = { pending: "En attente de l'acompte", confirmed: "Confirmée", cancelled: "Annulée", done: "Terminée" };
+  const METHOD_LABEL = { baridimob: "BaridiMob", ccp: "CCP", cash: "Espèces", other: "Autre" };
+
+  const auth = getAuth(app);
+  if (usingEmulator) connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
 
   const $ = (id) => document.getElementById(id);
-  if (Object.values(firebaseConfig).some((v) => String(v).includes("REMPLACER"))) {
-    document.querySelector("main").insertAdjacentHTML("beforeend",
-      '<section><h2>Projet Firebase pas encore relié</h2><p class="mute">Cette page fonctionnera dès que le projet Firebase du studio sera créé et que sa configuration sera collée dans <code>studio/web/admin/index.html</code> (étape 9 du guide <code>studio/README.md</code>).</p></section>');
-    $("signedOut").hidden = true;
-    throw new Error("Configuration Firebase du studio manquante.");
+  const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+  function show(text, bad = false) { const m = $("msg"); m.textContent = text; m.className = "msg" + (bad ? " bad" : ""); m.hidden = !text; }
+  const fail = (e) => show(e?.code === "permission-denied" ? "Refusé par les règles de sécurité : vérifiez votre rôle, ou rechargez la page (les données ont peut-être changé)." : (e?.message || String(e)), true);
+  async function busy(btn, fn) { btn.disabled = true; try { await fn(); } catch (e) { fail(e); } finally { btn.disabled = false; } }
+
+  let me = null; // { uid, email, role }
+
+  /** Journal d'audit écrit dans le même envoi que l'action ; renvoie son identifiant. */
+  function audit(w, action, entity, entityId, before = null, after = null) {
+    const ref = doc(collection(db, "auditLogs"));
+    w.set(ref, { action, entity, entityId, actorUid: me.uid, actorEmail: me.email, actorRole: me.role, at: serverTimestamp(), before, after });
+    return ref.id;
   }
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const fns = getFunctions(app, "europe-west1");
-  const call = (name, data) => httpsCallable(fns, name)(data).then((r) => r.data);
-
-  const ROLE_LABEL = { admin: "Administrateur", employee: "Employé", accountant: "Comptable" };
-
-  function show(text, bad = false) {
-    const m = $("msg");
-    m.textContent = text;
-    m.className = "msg" + (bad ? " bad" : "");
-    m.hidden = false;
-  }
-  const fail = (e) => show(e?.message || String(e), true);
-
-  async function busy(btn, fn) {
-    btn.disabled = true;
-    try { await fn(); } catch (e) { fail(e); } finally { btn.disabled = false; }
-  }
-
+  // ---------- Connexion ----------
   $("google").onclick = (e) => busy(e.target, () => signInWithPopup(auth, new GoogleAuthProvider()));
   $("emailLogin").onclick = (e) => busy(e.target, () => signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value));
+  $("emailSignup").onclick = (e) => busy(e.target, async () => {
+    const cred = await createUserWithEmailAndPassword(auth, $("email").value.trim(), $("password").value);
+    await sendEmailVerification(cred.user);
+    show("Compte créé. Ouvrez le lien de vérification reçu par e-mail, puis rechargez cette page.");
+  });
+  $("emailReset").onclick = (e) => busy(e.target, async () => { await sendPasswordResetEmail(auth, $("email").value.trim()); show("E-mail de réinitialisation envoyé."); });
+  $("resendVerify").onclick = (e) => busy(e.target, async () => { await sendEmailVerification(auth.currentUser); show("E-mail de vérification renvoyé."); });
   $("logout").onclick = () => signOut(auth);
 
   $("bootstrap").onclick = (e) => busy(e.target, async () => {
-    await call("staffBootstrapAdmin", {});
-    await auth.currentUser.getIdToken(true); // récupère le nouveau rôle
-    show("Tu es administrateur.");
-    await render(auth.currentUser);
+    const u = auth.currentUser;
+    const w = writeBatch(db);
+    w.set(doc(db, "staff", u.uid), { uid: u.uid, email: u.email, displayName: u.displayName || u.email, role: "admin", disabled: false, createdAt: serverTimestamp() });
+    await w.commit();
+    show("Vous êtes administrateur.");
+    await render(u);
+  });
+  $("join").onclick = (e) => busy(e.target, async () => {
+    const u = auth.currentUser;
+    const inv = (await getDoc(doc(db, "staffInvites", u.email))).data();
+    await writeBatch(db).set(doc(db, "staff", u.uid), { uid: u.uid, email: u.email, displayName: inv.displayName || u.displayName || u.email, role: inv.role, disabled: false, createdAt: serverTimestamp() }).commit();
+    show("Bienvenue dans l'équipe (" + ROLE_LABEL[inv.role] + ").");
+    await render(u);
   });
 
-  $("create").onclick = (e) => busy(e.target, async () => {
-    const r = await call("staffCreate", { displayName: $("newName").value, email: $("newEmail").value, role: $("newRole").value });
-    show("Compte créé. Envoie ce lien à la personne pour qu'elle choisisse son mot de passe :\n" + r.passwordLink);
+  // ---------- Demandes ----------
+  const catalogCache = new Map();
+  async function catalogVersion(v) {
+    if (!catalogCache.has(v)) {
+      const s = await getDoc(doc(db, "catalogVersions", v));
+      catalogCache.set(v, s.exists() ? s.data().catalog : null);
+    }
+    return catalogCache.get(v);
+  }
+
+  async function loadOrders() {
+    const f = $("oFilter").value;
+    const q = f ? query(collection(db, "orders"), where("status", "==", f), orderBy("createdAt", "desc"), limit(50)) : query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(50));
+    const snap = await getDocs(q);
+    const box = $("orders");
+    box.replaceChildren();
+    if (snap.empty) box.append(el("p", { className: "mute", textContent: "Aucune demande." }));
+    for (const d of snap.docs) box.append(await orderCard(d.id, d.data()));
+  }
+  $("oFilter").onchange = () => loadOrders().catch(fail);
+  $("oReload").onclick = (e) => busy(e.target, loadOrders);
+
+  async function orderCard(id, o) {
+    const card = el("div", { className: "order" });
+    const p = o.pricing;
+    const code = shortCode(id);
+    const created = o.createdAt ? o.createdAt.toMillis() : Date.now();
+    card.append(el("div", { className: "head" },
+      el("div", {}, el("strong", { textContent: (o.ref ? o.ref + " · " : "") + code + " — " + o.customer.name }), " ", el("span", { className: "mute", textContent: o.customer.phone + " · " + algiersLabel(created) })),
+      el("span", { className: "status " + o.status, textContent: STATUS_LABEL[o.status] || o.status })));
+    const lines = el("div", { className: "totals" }, ...p.lines.map((l) => el("div", { className: "detail" }, el("span", { textContent: l.label }), el("span", { textContent: l.price === null ? "sur devis" : fmtDA(l.price) }))));
+    if (p.total !== null) lines.append(el("div", { className: "detail strong" }, el("span", { textContent: `Total — acompte ${fmtDA(p.deposit)}` }), el("span", { textContent: fmtDA(p.total) })));
+    card.append(lines);
+    if (o.note) card.append(el("p", { className: "small", textContent: "Message : " + o.note }));
+    if (o.deposit) card.append(el("p", { className: "small ok", textContent: `Acompte ${fmtDA(o.deposit.amount)} (${METHOD_LABEL[o.deposit.method]}) reçu.` }));
+
+    // Contrôles : prix recalculé avec le tarif de la demande, tranches bien bloquées.
+    const checks = el("div");
+    card.append(checks);
+    if (o.status === "pending") {
+      const problems = [];
+      if (!p.fixedByStaff) {
+        const cat = await catalogVersion(o.catalogVersion);
+        if (!cat) problems.push("Version de tarif inconnue : " + o.catalogVersion);
+        else { const v = verifyOrderPricing(cat, o.lines, created, p, o.slots || {}); problems.push(...v.problems); }
+      }
+      const lost = await lostSlots(id, o);
+      if (lost) problems.push("Créneau plus bloqué pour cette demande (" + lost + " tranche(s)) : vérifiez avant de confirmer.");
+      if (o.holdExpiresAt && o.holdExpiresAt.toMillis() < Date.now()) problems.push("Délai de l'acompte dépassé depuis le " + algiersLabel(o.holdExpiresAt.toMillis()) + ".");
+      checks.append(problems.length ? el("div", { className: "warn", textContent: "⚠ " + problems.join("\n⚠ ") }) : el("div", { className: "ok", textContent: "✓ Prix conforme au tarif, créneau bloqué." }));
+    }
+
+    const url = trackingUrl(o.trackingToken);
+    const actions = el("div", { className: "inline" });
+    const wa = el("a", { className: "button whatsapp", target: "_blank", rel: "noopener", textContent: "WhatsApp client" });
+    wa.href = whatsappLink(o.customer.phone, staffWhatsappText({ name: o.customer.name.split(" ")[0], code, ref: o.ref, status: o.status, total: p.total, deposit: p.deposit, trackingUrl: url }));
+    actions.append(wa, el("a", { className: "button", href: url, target: "_blank", rel: "noopener", textContent: "Suivi" }));
+
+    const canOperate = me.role === "admin" || me.role === "employee";
+    if (canOperate && o.status === "pending" && p.total === null) {
+      const total = el("input", { type: "number", min: "0", step: "100", placeholder: "Prix du devis (DA)" });
+      const b = el("button", { textContent: "Fixer le prix" });
+      b.onclick = () => busy(b, () => fixQuote(id, o, Number(total.value)));
+      actions.append(total, b);
+    }
+    if (canOperate && o.status === "pending" && p.total !== null) {
+      const amount = el("input", { type: "number", min: "1", step: "100", value: String(p.deposit || p.total) });
+      amount.setAttribute("aria-label", "Montant de l'acompte reçu");
+      const method = el("select");
+      for (const [v, l] of Object.entries(METHOD_LABEL)) method.append(new Option(l, v));
+      const b = el("button", { className: "primary", textContent: "Acompte reçu → confirmer" });
+      b.onclick = () => busy(b, () => confirmDeposit(id, o, Number(amount.value), method.value));
+      actions.append(amount, method, b);
+    }
+    if (canOperate && o.status === "confirmed") {
+      const b = el("button", { textContent: "Marquer terminée" });
+      b.onclick = () => busy(b, () => setStatus(id, o, "done"));
+      actions.append(b);
+    }
+    if (canOperate && (o.status === "pending" || o.status === "confirmed")) {
+      const b = el("button", { textContent: "Annuler" });
+      b.onclick = () => { if (confirm("Annuler cette demande et libérer son créneau ?")) busy(b, () => cancelOrder(id, o)); };
+      actions.append(b);
+    }
+    card.append(actions);
+    return card;
+  }
+
+  /** Nombre de tranches de la demande qui ne lui appartiennent pas (ou plus) dans days/. */
+  async function lostSlots(id, o) {
+    let lost = 0;
+    for (const [date, hms] of Object.entries(o.slots || {})) {
+      const day = await getDoc(doc(db, "days", date));
+      const map = day.exists() ? day.data().slots || {} : {};
+      lost += hms.filter((hm) => !map[hm] || map[hm].o !== id).length;
+    }
+    return lost;
+  }
+
+  async function fixQuote(id, o, total) {
+    if (!Number.isSafeInteger(total) || total <= 0) throw new Error("Indiquez le prix du devis en dinars entiers.");
+    const deposit = percentOfDzd(total, o.pricing.depositPercent);
+    const pricing = { ...o.pricing, status: "priced", total, deposit, remaining: total - deposit, fixedByStaff: true };
+    const w = writeBatch(db);
+    const auditId = audit(w, "order.quote", "orders", id, { total: null }, { total });
+    w.update(doc(db, "orders", id), { pricing, updatedAt: serverTimestamp(), updatedBy: me.uid, auditId });
+    w.update(doc(db, "tracking", o.trackingToken), { total, deposit, remaining: total - deposit, quotePending: false, updatedAt: serverTimestamp(), auditId });
+    await w.commit();
+    show("Prix fixé : " + fmtDA(total) + ". Envoyez-le au client avec le bouton WhatsApp.");
+    await loadOrders();
+  }
+
+  async function confirmDeposit(id, o, amount, method) {
+    if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error("Montant de l'acompte invalide.");
+    if (amount < o.pricing.deposit && !confirm(`L'acompte prévu est ${fmtDA(o.pricing.deposit)}. Confirmer quand même avec ${fmtDA(amount)} ?`)) return;
+    const year = Number(utcMsToAlgiers(Date.now()).date.slice(0, 4));
+    let ref = "";
+    await runTransaction(db, async (tx) => {
+      const oRef = doc(db, "orders", id);
+      const cur = await tx.get(oRef);
+      if (cur.data().status !== "pending") throw new Error("Cette demande a déjà été traitée.");
+      const cRef = doc(db, "counters", "orders-" + year);
+      const c = await tx.get(cRef);
+      const dates = Object.keys(o.slots || {});
+      const days = await Promise.all(dates.map((d) => tx.get(doc(db, "days", d))));
+      const now = Date.now();
+      dates.forEach((date, i) => {
+        const map = days[i].exists() ? days[i].data().slots || {} : {};
+        for (const hm of o.slots[date]) {
+          const e = map[hm];
+          const expired = e && e.s === "hold" && e.u && e.u.toMillis() <= now;
+          if (e && e.o !== id && !expired) throw new Error(`Le créneau du ${date} à ${hm.slice(0, 2)}:${hm.slice(2)} est déjà pris par une autre demande.`);
+        }
+      });
+      const n = (c.exists() ? c.data().value : 0) + 1;
+      ref = formatRef(year, n);
+      const auditId = audit(tx, "order.confirm", "orders", id, { status: "pending" }, { status: "confirmed", ref, deposit: amount, method });
+      tx.set(cRef, { value: n });
+      tx.update(oRef, { status: "confirmed", ref, deposit: { amount, method, at: serverTimestamp(), by: me.uid }, updatedAt: serverTimestamp(), updatedBy: me.uid, auditId });
+      dates.forEach((date) => tx.set(doc(db, "days", date), { date, slots: Object.fromEntries(o.slots[date].map((hm) => [hm, { o: id, s: "booked", u: null }])), lastOrderId: id, updatedAt: serverTimestamp(), auditId }, { merge: true }));
+      tx.update(doc(db, "tracking", o.trackingToken), { status: "confirmed", ref, updatedAt: serverTimestamp(), auditId });
+      tx.set(doc(collection(db, "payments")), { orderId: id, ref, kind: "deposit", amount, method, note: "", recordedAt: serverTimestamp(), recordedBy: me.uid, auditId });
+    });
+    show(`Demande confirmée : ${ref}. Prévenez le client avec le bouton WhatsApp.`);
+    await loadOrders();
+    if ($("paymentsPanel").hidden === false) await loadPayments().catch(() => {});
+  }
+
+  async function setStatus(id, o, status) {
+    const w = writeBatch(db);
+    const auditId = audit(w, "order." + status, "orders", id, { status: o.status }, { status });
+    w.update(doc(db, "orders", id), { status, updatedAt: serverTimestamp(), updatedBy: me.uid, auditId });
+    w.update(doc(db, "tracking", o.trackingToken), { status, updatedAt: serverTimestamp(), auditId });
+    await w.commit();
+    await loadOrders();
+  }
+
+  /** Annule une demande et libère, dans days/, les tranches qui lui appartiennent encore. */
+  async function releaseOrder(id, o, action, message) {
+    await runTransaction(db, async (tx) => {
+      const dates = Object.keys(o.slots || {});
+      const days = await Promise.all(dates.map((d) => tx.get(doc(db, "days", d))));
+      const auditId = audit(tx, action, "orders", id, { status: o.status }, { status: "cancelled" });
+      dates.forEach((date, i) => {
+        const map = days[i].exists() ? days[i].data().slots || {} : {};
+        const mine = o.slots[date].filter((hm) => map[hm] && map[hm].o === id);
+        if (mine.length) tx.update(doc(db, "days", date), { ...Object.fromEntries(mine.map((hm) => ["slots." + hm, deleteField()])), lastOrderId: id, updatedAt: serverTimestamp(), auditId });
+      });
+      tx.update(doc(db, "orders", id), { status: "cancelled", updatedAt: serverTimestamp(), updatedBy: me.uid, auditId });
+      tx.update(doc(db, "tracking", o.trackingToken), { status: "cancelled", ...(message ? { message } : {}), updatedAt: serverTimestamp(), auditId });
+    });
+  }
+
+  async function cancelOrder(id, o) {
+    await releaseOrder(id, o, "order.cancel");
+    show("Demande annulée, créneau libéré.");
+    await loadOrders();
+  }
+
+  // Pas de tâche automatique sur le forfait gratuit : les demandes dont le délai
+  // d'acompte est dépassé sont annulées par l'équipe, en un clic.
+  async function checkExpired() {
+    const snap = await getDocs(query(collection(db, "orders"), where("status", "==", "pending"), orderBy("createdAt", "desc"), limit(200)));
+    const now = Date.now();
+    const expired = snap.docs.filter((d) => { const h = d.data().holdExpiresAt; return h && h.toMillis() < now; });
+    $("expiredBox").hidden = !expired.length;
+    $("expiredCount").textContent = String(expired.length);
+    $("releaseExpired").onclick = (e) => busy(e.target, async () => {
+      for (const d of expired) await releaseOrder(d.id, d.data(), "order.expire", "Délai de l'acompte dépassé : le créneau a été libéré. Contactez le studio pour une nouvelle date.");
+      show(expired.length + " demande(s) expirée(s) annulée(s), créneaux libérés.");
+      await loadOrders(); await checkExpired();
+    });
+  }
+
+  async function loadPayments() {
+    const snap = await getDocs(query(collection(db, "payments"), orderBy("recordedAt", "desc"), limit(100)));
+    $("payRows").replaceChildren(...snap.docs.map((d) => {
+      const p = d.data();
+      return el("tr", {}, el("td", { textContent: p.recordedAt ? algiersLabel(p.recordedAt.toMillis()) : "" }), el("td", { textContent: p.ref || shortCode(p.orderId) }),
+        el("td", { textContent: { deposit: "Acompte", balance: "Reste", refund: "Remboursement" }[p.kind] }), el("td", { textContent: METHOD_LABEL[p.method] }),
+        el("td", { textContent: fmtDA(p.amount), style: "text-align:right" }));
+    }));
+  }
+
+  // ---------- Équipe ----------
+  $("invite").onclick = (e) => busy(e.target, async () => {
+    const email = $("newEmail").value.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("E-mail invalide.");
+    const role = $("newRole").value;
+    const w = writeBatch(db);
+    const auditId = audit(w, "staff.invite", "staffInvites", email, null, { role });
+    w.set(doc(db, "staffInvites", email), { email, role, displayName: $("newName").value.trim().slice(0, 80), invitedBy: me.uid, invitedAt: serverTimestamp(), auditId });
+    await w.commit();
+    show(`Invitation enregistrée. Dites à la personne d'ouvrir cette page, de se connecter avec ${email}, puis d'appuyer sur « Rejoindre l'équipe ».`);
     $("newName").value = ""; $("newEmail").value = "";
     await loadStaff();
   });
 
-  // ---------- Grille de tarifs du studio ----------
-  const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
-  const toMin = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
-  let grid = null;      // état édité
-  let loadedStudio = null;
-
-  function gridFromStudio(st) {
-    const keys = [...new Set(st.periods.map((p) => p.from + "-" + p.to))].sort((a, b) => toMin(a) - toMin(b));
-    const bands = keys.map((k) => ({ from: k.slice(0, 5), to: k.slice(6, 11) }));
-    const rates = DAYS.map((_, d) => bands.map((b) => {
-      const p = st.periods.find((x) => x.from === b.from && x.to === b.to && x.days.includes(d));
-      return p ? p.price : null;
-    }));
-    return {
-      bands, rates,
-      addons: (st.addons || []).map((a) => ({ id: a.id, name: a.name, price: a.price })),
-      minMinutes: st.minMinutes, stepMinutes: st.stepMinutes, bufferMinutes: st.bufferMinutes, minPrice: st.minPrice,
-    };
+  async function updateStaff(uid, s, change) {
+    const w = writeBatch(db);
+    const auditId = audit(w, "staff.update", "staff", uid, { role: s.role, disabled: s.disabled }, change);
+    w.update(doc(db, "staff", uid), { role: s.role, disabled: s.disabled, ...change, auditId });
+    await w.commit();
+    await loadStaff();
   }
 
+  async function loadStaff() {
+    const [snap, inv] = await Promise.all([getDocs(query(collection(db, "staff"), orderBy("displayName"))), getDocs(collection(db, "staffInvites"))]);
+    const joined = new Set(snap.docs.map((d) => d.data().email));
+    $("staffRows").replaceChildren(...snap.docs.map((d) => {
+      const s = d.data();
+      const sel = el("select");
+      for (const [v, l] of Object.entries(ROLE_LABEL)) sel.append(new Option(l, v, false, v === s.role));
+      sel.disabled = d.id === me.uid;
+      sel.onchange = () => busy(sel, async () => { await updateStaff(d.id, s, { role: sel.value }); show("Rôle modifié (effet immédiat)."); });
+      const act = el("td");
+      if (d.id !== me.uid) {
+        const b = el("button", { textContent: s.disabled ? "Réactiver" : "Désactiver" });
+        b.onclick = () => busy(b, () => updateStaff(d.id, s, { disabled: !s.disabled }));
+        act.append(b);
+      }
+      return el("tr", {}, el("td", { textContent: s.displayName }), el("td", { textContent: s.email }), el("td", {}, sel), el("td", { textContent: s.disabled ? "Désactivé" : "Actif" }), act);
+    }));
+    const pending = inv.docs.filter((d) => !joined.has(d.id));
+    $("inviteRows").replaceChildren(...(pending.length ? pending.map((d) => {
+      const b = el("button", { className: "link", textContent: "Retirer" });
+      b.onclick = () => busy(b, async () => { await deleteDoc(doc(db, "staffInvites", d.id)); await loadStaff(); });
+      return el("tr", {}, el("td", { textContent: d.id }), el("td", { textContent: ROLE_LABEL[d.data().role] }), el("td", {}, b));
+    }) : [el("tr", {}, el("td", { className: "mute", textContent: "Aucune." }))]));
+  }
+
+  // ---------- Coordonnées ----------
+  async function loadContact() {
+    const s = await getDoc(doc(db, "publicSettings", "contact"));
+    const k = s.exists() ? s.data() : {};
+    $("kName").value = k.studioName || ""; $("kWhatsapp").value = k.whatsapp ? "0" + k.whatsapp.slice(3) : "";
+    $("kHold").value = k.holdHours || 24; $("kBaridi").value = k.baridimob || ""; $("kCcp").value = k.ccp || ""; $("kNote").value = k.depositNote || "";
+  }
+  $("saveContact").onclick = (e) => busy(e.target, async () => {
+    const raw = $("kWhatsapp").value.trim();
+    const whatsapp = raw ? normalizeDzPhone(raw).e164.slice(1) : "";
+    const holdHours = Math.round(Number($("kHold").value));
+    if (!(holdHours >= 1 && holdHours <= 72)) throw new Error("Délai de l'acompte : entre 1 et 72 heures.");
+    const data = { studioName: $("kName").value.trim().slice(0, 80), whatsapp, holdHours, baridimob: $("kBaridi").value.trim().slice(0, 80), ccp: $("kCcp").value.trim().slice(0, 80), depositNote: $("kNote").value.trim().slice(0, 300) };
+    const w = writeBatch(db);
+    const auditId = audit(w, "settings.contact", "publicSettings", "contact", null, data);
+    w.set(doc(db, "publicSettings", "contact"), { ...data, updatedAt: serverTimestamp(), auditId });
+    await w.commit();
+    show("Coordonnées enregistrées." + (whatsapp ? "" : " Sans numéro WhatsApp, le bouton WhatsApp n'apparaît pas chez le client."));
+  });
+
+  // ---------- Tarifs ----------
+  let currentCatalog = null;
+  async function publish(catalog) {
+    const c = assertCatalog(catalog);
+    const w = writeBatch(db);
+    const auditId = audit(w, "catalog.publish", "publicSettings", "catalog", { version: currentCatalog?.version ?? null }, { version: c.version, provisional: c.provisional });
+    w.set(doc(db, "catalogVersions", c.version), { catalog: c, publishedAt: serverTimestamp(), publishedBy: me.uid, replaced: currentCatalog?.version ?? null });
+    w.set(doc(db, "publicSettings", "catalog"), { catalog: c, version: c.version, publishedAt: serverTimestamp(), publishedBy: me.uid, auditId });
+    await w.commit();
+    return c.version;
+  }
+  $("seedCatalog").onclick = (e) => busy(e.target, async () => { const v = await publish(DEFAULT_CATALOG); show("Tarifs provisoires publiés : " + v); await loadCatalog(); });
+
+  const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+  let grid = null;
   function input(value, cls, onInput, type = "text") {
-    const i = document.createElement("input");
-    i.type = type;
+    const i = el("input", { type, value: value == null ? "" : String(value) });
     if (cls) i.className = cls;
-    i.value = value == null ? "" : String(value);
     i.oninput = () => onInput(i.value);
     return i;
   }
-
   function renderGrid() {
-    const head = $("ratesHead"), body = $("ratesBody");
-    head.replaceChildren(); body.replaceChildren();
-    const hr = document.createElement("tr");
-    const th0 = document.createElement("th"); th0.textContent = "Jour"; hr.append(th0);
-    grid.bands.forEach((b, i) => {
-      const th = document.createElement("th");
-      th.append(input(b.from, "hm", (v) => (grid.bands[i].from = v)), document.createTextNode(" – "), input(b.to, "hm", (v) => (grid.bands[i].to = v)));
-      hr.append(th);
-    });
-    head.append(hr);
-    DAYS.forEach((name, d) => {
-      const tr = document.createElement("tr");
-      const td0 = document.createElement("td"); td0.textContent = name; tr.append(td0);
-      grid.bands.forEach((_, b) => {
-        const td = document.createElement("td");
-        const i = input(grid.rates[d][b], "", (v) => (grid.rates[d][b] = v.trim() === "" ? null : Number(v)), "number");
-        i.min = "0"; i.step = "100"; i.placeholder = "fermé";
-        i.setAttribute("aria-label", name + " " + grid.bands[b].from + "–" + grid.bands[b].to + " (forfait en DA)");
-        td.append(i, document.createTextNode(" DA"));
-        tr.append(td);
-      });
-      body.append(tr);
-    });
-    const rows = $("optRows");
-    rows.replaceChildren();
-    grid.addons.forEach((a, i) => {
-      const r = document.createElement("div"); r.className = "optrow";
+    const hr = el("tr", {}, el("th", { textContent: "Jour" }));
+    grid.bands.forEach((b, i) => hr.append(el("th", {}, input(b.from, "hm", (v) => (grid.bands[i].from = v)), " – ", input(b.to, "hm", (v) => (grid.bands[i].to = v)))));
+    $("ratesHead").replaceChildren(hr);
+    $("ratesBody").replaceChildren(...DAYS.map((name, d) => el("tr", {}, el("td", { textContent: name }), ...grid.bands.map((_, b) => {
+      const i = input(grid.rates[d][b], "", (v) => (grid.rates[d][b] = v.trim() === "" ? null : Number(v)), "number");
+      i.min = "0"; i.step = "100"; i.placeholder = "fermé";
+      i.setAttribute("aria-label", name + " " + grid.bands[b].from + "–" + grid.bands[b].to + " (forfait en DA)");
+      return el("td", {}, i, " DA");
+    }))));
+    $("optRows").replaceChildren(...grid.addons.map((a, i) => {
       const n = input(a.name, "", (v) => (grid.addons[i].name = v)); n.placeholder = "Nom de l'option"; n.setAttribute("aria-label", "Nom de l'option");
       const p = input(a.price, "", (v) => (grid.addons[i].price = Number(v)), "number"); p.min = "0"; p.step = "100"; p.setAttribute("aria-label", "Prix de l'option en DA");
-      const del = document.createElement("button"); del.textContent = "Retirer";
+      const del = el("button", { textContent: "Retirer" });
       del.onclick = () => { grid.addons.splice(i, 1); renderGrid(); };
-      r.append(n, p, del); rows.append(r);
-    });
+      return el("div", { className: "optrow" }, n, p, del);
+    }));
     $("minMinutes").value = grid.minMinutes; $("stepMinutes").value = grid.stepMinutes;
     $("bufferMinutes").value = grid.bufferMinutes; $("minPrice").value = grid.minPrice;
   }
-
   $("addBand").onclick = () => {
     const last = grid.bands[grid.bands.length - 1];
     const from = last ? last.to : "08:00";
@@ -262,17 +536,14 @@
     grid.bands.pop(); grid.rates.forEach((row) => row.pop()); renderGrid();
   };
   $("addOpt").onclick = () => { grid.addons.push({ name: "", price: 0 }); renderGrid(); };
-  $("resetRates").onclick = () => { grid = gridFromStudio(loadedStudio); renderGrid(); show("Modifications annulées."); };
+  $("resetRates").onclick = () => { grid = gridFromStudio(currentCatalog.studio); renderGrid(); show("Modifications annulées."); };
   $("publishRates").onclick = (e) => busy(e.target, async () => {
-    const payload = {
-      ...grid,
-      minMinutes: Number($("minMinutes").value),
-      stepMinutes: Number($("stepMinutes").value),
-      bufferMinutes: Number($("bufferMinutes").value),
-      minPrice: Number($("minPrice").value),
-    };
-    const r = await call("catalogUpdateStudioRates", { grid: payload, provisional: $("provisional").checked });
-    show("Nouveaux tarifs en vigueur (version " + r.version + "). Les commandes déjà passées gardent leur prix.");
+    const payload = { ...grid, minMinutes: Number($("minMinutes").value), stepMinutes: Number($("stepMinutes").value), bufferMinutes: Number($("bufferMinutes").value), minPrice: Number($("minPrice").value) };
+    const studio = studioFromGrid(payload, currentCatalog.studio);
+    const t = utcMsToAlgiers(Date.now());
+    const version = `studio-${t.date}-${t.hm}-${Date.now() % 100000}`;
+    const v = await publish({ ...currentCatalog, version, provisional: $("provisional").checked, studio });
+    show("Nouveaux tarifs en vigueur (version " + v + "). Les demandes déjà envoyées gardent leur prix.");
     await loadCatalog();
   });
 
@@ -280,68 +551,59 @@
     const snap = await getDoc(doc(db, "publicSettings", "catalog"));
     if (!snap.exists()) {
       $("catalogInfo").textContent = "Aucun tarif publié : le site client ne peut pas encore calculer de prix.";
-      $("seedCatalog").hidden = false;
-      $("ratesPanel").hidden = true;
+      $("seedCatalog").hidden = false; $("ratesPanel").hidden = true;
       return;
     }
-    const c = snap.data().catalog;
-    $("catalogInfo").textContent = "Version en vigueur : " + c.version + (c.provisional ? " (tarifs provisoires)" : "") + ".";
+    currentCatalog = snap.data().catalog;
+    $("catalogInfo").textContent = "Version en vigueur : " + currentCatalog.version + (currentCatalog.provisional ? " (tarifs provisoires)" : "") + ".";
     $("seedCatalog").hidden = true;
-    loadedStudio = c.studio;
-    grid = gridFromStudio(c.studio);
-    $("provisional").checked = !!c.provisional;
+    grid = gridFromStudio(currentCatalog.studio);
+    $("provisional").checked = !!currentCatalog.provisional;
     renderGrid();
     $("ratesPanel").hidden = false;
   }
-  $("seedCatalog").onclick = (e) => busy(e.target, async () => {
-    const r = await call("catalogSeedDefaults", {});
-    show("Tarifs provisoires publiés : " + r.version);
-    await loadCatalog();
+
+  // ---------- Sauvegarde ----------
+  $("exportDb").onclick = (e) => busy(e.target, async () => {
+    const names = ["orders", "payments", "days", "staff", "staffInvites", "catalogVersions", "publicSettings", "counters", "auditLogs"];
+    const plain = (v) => v && typeof v.toDate === "function" ? v.toDate().toISOString() : Array.isArray(v) ? v.map(plain) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)])) : v;
+    const out = { exportedAt: new Date().toISOString(), project: app.options.projectId, collections: {} };
+    for (const n of names) out.collections[n] = Object.fromEntries((await getDocs(collection(db, n))).docs.map((d) => [d.id, plain(d.data())]));
+    const a = el("a", { download: `studio-sauvegarde-${utcMsToAlgiers(Date.now()).date}.json`, href: URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: "application/json" })) });
+    a.click();
+    show("Sauvegarde téléchargée (sans les fiches de suivi des clients, qui sont recréables depuis les demandes).");
   });
 
-  async function loadStaff() {
-    const snap = await getDocs(query(collection(db, "staff"), orderBy("displayName")));
-    const me = auth.currentUser?.uid;
-    const rows = $("staffRows");
-    rows.replaceChildren();
-    for (const d of snap.docs) {
-      const s = d.data();
-      const tr = document.createElement("tr");
-      const td = (t) => { const c = document.createElement("td"); c.textContent = t; tr.append(c); return c; };
-      td(s.displayName); td(s.email);
-      const roleCell = td("");
-      const sel = document.createElement("select");
-      for (const [v, l] of Object.entries(ROLE_LABEL)) sel.append(new Option(l, v, false, v === s.role));
-      sel.disabled = d.id === me;
-      sel.onchange = () => busy(sel, async () => { await call("staffSetRole", { uid: d.id, role: sel.value }); show("Rôle modifié. Il s'applique à sa prochaine connexion."); await loadStaff(); });
-      roleCell.append(sel);
-      td(s.disabled ? "Désactivé" : "Actif");
-      const act = td("");
-      if (d.id !== me) {
-        const b = document.createElement("button");
-        b.textContent = s.disabled ? "Réactiver" : "Désactiver";
-        b.onclick = () => busy(b, async () => { await call("staffSetDisabled", { uid: d.id, disabled: !s.disabled }); await loadStaff(); });
-        act.append(b);
-      }
-      rows.append(tr);
-    }
-  }
-
+  // ---------- Affichage selon le rôle ----------
   async function render(user) {
+    for (const id of ["signedIn", "ordersPanel", "paymentsPanel", "adminPanel", "ratesPanel", "bootstrap", "join", "verifyInfo", "noAccess"]) $(id).hidden = true;
     $("signedOut").hidden = !!user;
-    $("signedIn").hidden = !user;
-    $("adminPanel").hidden = true;
-    $("ratesPanel").hidden = true;
+    me = null;
     if (!user) return;
-    const token = await user.getIdTokenResult();
-    const role = token.claims.role || null;
+    $("signedIn").hidden = false;
     $("me").textContent = user.email || user.uid;
-    $("myRole").textContent = role ? ROLE_LABEL[role] : "aucun";
-    $("bootstrap").hidden = role === "admin";
+    if (!user.emailVerified) { $("verifyInfo").hidden = false; $("myRole").textContent = "aucun"; return; }
+    const s = await getDoc(doc(db, "staff", user.uid));
+    const staff = s.exists() ? s.data() : null;
+    const role = staff && !staff.disabled ? staff.role : null;
+    $("myRole").textContent = role ? ROLE_LABEL[role] : staff?.disabled ? "compte désactivé" : "aucun";
+    if (!staff) {
+      if (BOOTSTRAP_EMAILS.includes(user.email)) $("bootstrap").hidden = false;
+      else {
+        const inv = await getDoc(doc(db, "staffInvites", user.email)).catch(() => null);
+        if (inv && inv.exists()) $("join").hidden = false; else $("noAccess").hidden = false;
+      }
+      return;
+    }
+    if (!role) return;
+    me = { uid: user.uid, email: user.email, role };
+    $("ordersPanel").hidden = false;
+    await loadOrders().catch(fail);
+    if (role !== "accountant") await checkExpired().catch(fail);
+    if (role === "admin" || role === "accountant") { $("paymentsPanel").hidden = false; await loadPayments().catch(fail); }
     if (role === "admin") {
       $("adminPanel").hidden = false;
-      await loadStaff().catch(fail);
-      await loadCatalog().catch(fail);
+      await Promise.all([loadStaff(), loadContact(), loadCatalog()]).catch(fail);
     }
   }
   onAuthStateChanged(auth, (u) => render(u).catch(fail));

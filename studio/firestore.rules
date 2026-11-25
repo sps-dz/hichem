@@ -1,101 +1,291 @@
 rules_version = '2';
 
-// Studio Hichem Sponsor — règles Firestore.
+// Studio Hichem Sponsor — règles Firestore, version forfait gratuit Spark.
 //
-// Principe : personne n'écrit depuis le navigateur. Toutes les écritures passent
-// par les Cloud Functions (SDK Admin, qui ne sont pas soumises à ces règles),
-// pour que chaque montant soit recalculé et chaque modification journalisée.
-// Les navigateurs ne font que lire, et seulement ce que leur rôle autorise.
+// Il n'y a pas de Cloud Functions : les navigateurs écrivent directement, et ces
+// règles sont le seul garde-fou. Principes :
+//   - le client (sans compte) peut seulement CRÉER une demande, avec ses tranches
+//     de studio et sa fiche de suivi, en une seule écriture groupée ;
+//   - une tranche déjà prise ne peut pas être reprise (sauf blocage expiré) :
+//     si une seule tranche est prise, toute la demande est refusée ;
+//   - l'équipe agit selon son rôle (fiche staff/{uid} relue à chaque requête),
+//     et chaque action de l'équipe écrit son journal d'audit dans le même envoi ;
+//   - le prix calculé par le navigateur du client est une estimation : l'équipe
+//     le recalcule avec le tarif publié avant de valider l'acompte.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // ---------- Fonctions d'aide ----------
 
-    function signedIn() {
-      return request.auth != null;
-    }
+    // E-mails autorisés à se déclarer premier administrateur.
+    function bootstrapEmails() { return ['comptppl@gmail.com']; }
 
-    // Membre de l'équipe : compte Firebase avec un rôle (custom claim posé par les
-    // fonctions), e-mail vérifié, fiche staff active. La fiche est relue à chaque
-    // requête : un compte désactivé perd l'accès tout de suite, sans attendre
-    // l'expiration de son jeton (1 h).
-    function staffDoc() {
-      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data;
-    }
+    function signedIn() { return request.auth != null; }
 
-    function hasRole(roles) {
+    function verifiedEmail() {
       return signedIn()
-        && request.auth.token.email_verified == true
-        && request.auth.token.role in roles
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+
+    function staffDoc() { return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data; }
+
+    // Membre actif de l'équipe avec l'un des rôles donnés. La fiche est relue à
+    // chaque requête : un compte désactivé perd l'accès immédiatement.
+    function hasRole(roles) {
+      return verifiedEmail()
         && exists(/databases/$(database)/documents/staff/$(request.auth.uid))
         && staffDoc().disabled == false
-        && staffDoc().role == request.auth.token.role;
+        && staffDoc().role in roles;
     }
 
     function isStaff()      { return hasRole(['admin', 'employee', 'accountant']); }
     function isAdmin()      { return hasRole(['admin']); }
-    function isFinance()    { return hasRole(['admin', 'accountant']); }
     function isOperations() { return hasRole(['admin', 'employee']); }
+    function isFinance()    { return hasRole(['admin', 'accountant']); }
 
-    // ---------- Catalogue public (lecture par tout le monde) ----------
+    function isRole(r) { return r in ['admin', 'employee', 'accountant']; }
 
-    match /services/{id}        { allow read: if true; allow write: if false; }
-    match /packages/{id}        { allow read: if true; allow write: if false; }
-    match /addons/{id}          { allow read: if true; allow write: if false; }
-    match /pricingRules/{id}    { allow read: if true; allow write: if false; }
-    match /pricingPeriods/{id}  { allow read: if true; allow write: if false; }
-    match /volumeTiers/{id}     { allow read: if true; allow write: if false; }
-    match /specialDates/{id}    { allow read: if true; allow write: if false; }
-    match /studioHours/{id}     { allow read: if true; allow write: if false; }
-    match /studioClosures/{id}  { allow read: if true; allow write: if false; }
-    match /promotions/{id}      { allow read: if true; allow write: if false; }
-    match /bundleRules/{id}     { allow read: if true; allow write: if false; }
-    match /publicSettings/{id}  { allow read: if true; allow write: if false; }
-
-    // Disponibilités : un document par jour, avec seulement les tranches occupées
-    // (heure, type, fin du blocage). Aucune donnée client.
-    match /availability/{date}  { allow read: if true; allow write: if false; }
-
-    // ---------- Exploitation (admin + employé, et comptable en lecture) ----------
-
-    match /customers/{id}       { allow read: if isStaff(); allow write: if false; }
-    match /orders/{id} {
-      allow read: if isStaff();
-      allow write: if false;
-      match /{sub=**}           { allow read: if isStaff(); allow write: if false; }
+    // L'action de l'équipe porte `auditId` : le journal correspondant doit être
+    // créé dans le même envoi (voir /auditLogs plus bas).
+    // Un journal déjà existant ne peut pas resservir : son heure doit être celle de l'envoi.
+    function audited() {
+      return request.resource.data.auditId is string
+        && (resource == null || request.resource.data.auditId != resource.data.get('auditId', ''))
+        && getAfter(/databases/$(database)/documents/auditLogs/$(request.resource.data.auditId)).data.at == request.time;
     }
-    match /bookings/{id}        { allow read: if isStaff(); allow write: if false; }
-    match /quotes/{id}          { allow read: if isStaff(); allow write: if false; }
-    match /slots/{key}          { allow read: if isOperations(); allow write: if false; }
-    match /notifications/{id}   { allow read: if isOperations(); allow write: if false; }
 
-    // ---------- Argent (admin + comptable) ----------
+    function shortText(v, max) { return v is string && v.size() <= max; }
 
-    match /payments/{id}          { allow read: if isFinance(); allow write: if false; }
-    match /paymentProofs/{id}     { allow read: if isFinance(); allow write: if false; }
-    match /expenses/{id}          { allow read: if isFinance(); allow write: if false; }
-    match /expenseCategories/{id} { allow read: if isFinance(); allow write: if false; }
+    // ---------- Réglages publics ----------
 
-    // ---------- Administration (admin seulement) ----------
+    match /publicSettings/catalog {
+      allow read: if true;
+      // Publication d'une version : la copie dans catalogVersions est créée en même temps.
+      allow write: if isAdmin() && audited()
+        && request.resource.data.keys().hasOnly(['catalog', 'version', 'publishedAt', 'publishedBy', 'auditId'])
+        && request.resource.data.version is string
+        && request.resource.data.version == request.resource.data.catalog.version
+        && request.resource.data.publishedAt == request.time
+        && request.resource.data.publishedBy == request.auth.uid
+        && existsAfter(/databases/$(database)/documents/catalogVersions/$(request.resource.data.version))
+        && !exists(/databases/$(database)/documents/catalogVersions/$(request.resource.data.version));
+    }
+
+    // Coordonnées affichées au client : WhatsApp, BaridiMob, CCP, délai de l'acompte…
+    match /publicSettings/contact {
+      allow read: if true;
+      allow write: if isAdmin() && audited()
+        && request.resource.data.keys().hasOnly(['studioName', 'whatsapp', 'baridimob', 'ccp', 'depositNote', 'holdHours', 'siteUrl', 'auditId', 'updatedAt'])
+        && (!('whatsapp' in request.resource.data) || request.resource.data.whatsapp == '' || request.resource.data.whatsapp.matches('^213[0-9]{8,9}$'))
+        && request.resource.data.holdHours is int
+        && request.resource.data.holdHours >= 1 && request.resource.data.holdHours <= 72
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    match /catalogVersions/{version} {
+      // L'équipe relit la version d'une commande pour recalculer son prix.
+      allow read: if isStaff();
+      allow create: if isAdmin()
+        && request.resource.data.catalog.version == version
+        && request.resource.data.publishedAt == request.time
+        && request.resource.data.publishedBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ---------- Équipe ----------
 
     match /staff/{uid} {
-      // Chacun peut lire sa propre fiche (pour afficher son rôle) ; l'admin lit tout.
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
-      allow write: if false;
-    }
-    match /auditLogs/{id}        { allow read: if isAdmin(); allow write: if false; }
-    match /settings/{id}         { allow read: if isAdmin(); allow write: if false; }
-    match /promotionUsages/{id}  { allow read: if isAdmin(); allow write: if false; }
-    match /counters/{id}         { allow read: if isAdmin(); allow write: if false; }
-    match /systemJobs/{id}       { allow read: if isAdmin(); allow write: if false; }
-    match /catalogVersions/{id}  { allow read: if isAdmin(); allow write: if false; }
 
-    // Liens privés des clients : jamais lisibles depuis un navigateur, même par
-    // l'admin. Seules les fonctions les vérifient.
-    match /customerAccess/{hash} { allow read, write: if false; }
+      allow create: if verifiedEmail()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'disabled', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && shortText(request.resource.data.displayName, 80)
+        && request.resource.data.disabled == false
+        && request.resource.data.createdAt == request.time
+        && (
+          // Premier administrateur : e-mail de la liste.
+          (request.resource.data.role == 'admin' && request.auth.token.email in bootstrapEmails())
+          // Membre invité par l'admin : rôle de l'invitation.
+          || (exists(/databases/$(database)/documents/staffInvites/$(request.auth.token.email))
+              && get(/databases/$(database)/documents/staffInvites/$(request.auth.token.email)).data.role == request.resource.data.role)
+        );
+
+      // L'admin change le rôle ou désactive un compte (jamais le sien).
+      allow update: if isAdmin() && request.auth.uid != uid && audited()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'disabled', 'auditId'])
+        && isRole(request.resource.data.role)
+        && request.resource.data.disabled is bool;
+      allow delete: if false;
+    }
+
+    // Invitations : l'admin indique l'e-mail et le rôle ; la personne se connecte
+    // avec ce compte (Google, ou e-mail vérifié) et sa fiche est créée.
+    match /staffInvites/{email} {
+      allow read: if isAdmin() || (verifiedEmail() && request.auth.token.email == email);
+      allow create, update: if isAdmin() && audited()
+        && request.resource.data.keys().hasOnly(['email', 'role', 'displayName', 'invitedBy', 'invitedAt', 'auditId'])
+        && request.resource.data.email == email
+        && isRole(request.resource.data.role)
+        && shortText(request.resource.data.displayName, 80)
+        && request.resource.data.invitedBy == request.auth.uid
+        && request.resource.data.invitedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Calendrier du studio ----------
+
+    // Un document par jour : days/{AAAA-MM-JJ}, avec la carte des tranches de
+    // 30 min occupées, ex. slots.1430 = { o: identifiant de demande, s: 'hold' |
+    // 'booked', u: fin du blocage }. Lisible par tous (aucune donnée client).
+    //
+    // Le client peut seulement AJOUTER des tranches absentes, exactement celles de
+    // la demande qu'il crée dans le même envoi : si une seule est déjà prise (même
+    // par un envoi simultané), tout l'envoi est refusé. Une seule lecture de
+    // contrôle par jour, quelle que soit la durée réservée.
+    match /days/{date} {
+      allow read: if true;
+
+      function dayShape() {
+        return date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.keys().hasOnly(['date', 'slots', 'lastOrderId', 'updatedAt', 'auditId'])
+          && request.resource.data.date == date
+          && request.resource.data.slots is map
+          && request.resource.data.updatedAt == request.time;
+      }
+
+      function clientAdds() {
+        let before = resource == null ? {} : resource.data.slots;
+        let d = request.resource.data.slots.diff(before);
+        let order = getAfter(/databases/$(database)/documents/orders/$(request.resource.data.lastOrderId));
+        return dayShape()
+          && d.changedKeys().size() == 0
+          && d.removedKeys().size() == 0
+          && d.addedKeys().size() > 0
+          && order.data.createdAt == request.time
+          && order.data.status == 'pending'
+          && d.addedKeys() == order.data.slots[date].toSet();
+      }
+
+      // L'équipe confirme (blocage → réservé), libère, ou réserve au comptoir.
+      function staffWrite() { return isOperations() && dayShape() && audited(); }
+
+      allow create, update: if clientAdds() || staffWrite();
+      allow delete: if false;
+    }
+
+    // ---------- Demandes des clients ----------
+
+    match /orders/{orderId} {
+      allow read: if isStaff();
+
+      // Le client envoie sa demande (sans compte). Tout est vérifié ici ; le prix,
+      // calculé avec le tarif en vigueur, est recalculé par l'équipe ensuite.
+      allow create: if orderId.matches('^[A-Za-z0-9]{20}$')
+        && request.resource.data.keys().hasOnly(['status', 'customer', 'lines', 'pricing', 'slots', 'holdExpiresAt', 'trackingToken', 'note', 'catalogVersion', 'createdAt', 'source'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.source == 'web'
+        && request.resource.data.customer.keys().hasOnly(['name', 'phone'])
+        && request.resource.data.customer.name is string
+        && request.resource.data.customer.name.size() >= 2
+        && request.resource.data.customer.name.size() <= 80
+        && request.resource.data.customer.phone.matches('^\\+213([567][0-9]{8}|[234][0-9]{7})$')
+        && request.resource.data.lines is list
+        && request.resource.data.lines.size() >= 1
+        && request.resource.data.lines.size() <= 20
+        && request.resource.data.pricing is map
+        // slots = { 'AAAA-MM-JJ': ['1400', '1430', …] } : les tranches bloquées dans days/.
+        && request.resource.data.slots is map
+        && request.resource.data.slots.size() <= 10
+        && (request.resource.data.slots.size() == 0 || (
+              request.resource.data.holdExpiresAt is timestamp
+              && request.resource.data.holdExpiresAt > request.time
+              && request.resource.data.holdExpiresAt <= request.time + duration.value(72, 'h')))
+        && shortText(request.resource.data.note, 1000)
+        && request.resource.data.trackingToken.matches('^[A-Za-z0-9]{32}$')
+        && existsAfter(/databases/$(database)/documents/tracking/$(request.resource.data.trackingToken))
+        && request.resource.data.catalogVersion == get(/databases/$(database)/documents/publicSettings/catalog).data.version;
+
+      // L'équipe fait avancer la demande (acompte reçu, annulée, terminée…).
+      allow update: if isOperations() && audited()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'ref', 'deposit', 'staffNote', 'pricing', 'updatedAt', 'updatedBy', 'auditId'])
+        && request.resource.data.status in ['pending', 'confirmed', 'cancelled', 'done']
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Fiche de suivi du client : lisible seulement par qui connaît le lien
+    // (jeton secret de 32 caractères). Aucune liste possible, pas de téléphone.
+    match /tracking/{token} {
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if token.matches('^[A-Za-z0-9]{32}$')
+        && request.resource.data.keys().hasOnly(['orderId', 'code', 'status', 'name', 'lines', 'total', 'deposit', 'remaining', 'quotePending', 'createdAt', 'holdExpiresAt'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.trackingToken == token;
+
+      allow update: if isOperations() && audited()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'ref', 'total', 'deposit', 'remaining', 'quotePending', 'lines', 'message', 'updatedAt', 'auditId'])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // ---------- Argent ----------
+
+    // Encaissements (acompte, reste) : saisis par l'équipe, lus par admin + comptable.
+    match /payments/{id} {
+      allow read: if isFinance() || (isOperations() && resource.data.recordedBy == request.auth.uid);
+      allow create: if (isOperations() || isFinance()) && audited()
+        && request.resource.data.keys().hasOnly(['orderId', 'ref', 'kind', 'amount', 'method', 'note', 'recordedAt', 'recordedBy', 'auditId'])
+        && request.resource.data.amount is int
+        && request.resource.data.amount > 0
+        && request.resource.data.amount <= 1000000000
+        && request.resource.data.kind in ['deposit', 'balance', 'refund']
+        && request.resource.data.method in ['baridimob', 'ccp', 'cash', 'other']
+        && request.resource.data.recordedAt == request.time
+        && request.resource.data.recordedBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Numérotation STU-AAAA-000123 (une par année), avancée par l'équipe dans une transaction.
+    match /counters/{id} {
+      allow read: if isStaff();
+      allow write: if isOperations()
+        && id.matches('^orders-[0-9]{4}$')
+        && request.resource.data.keys().hasOnly(['value'])
+        && request.resource.data.value is int
+        && request.resource.data.value == (resource == null ? 0 : resource.data.value) + 1;
+    }
+
+    // ---------- Journal d'audit ----------
+
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      // Écrit par l'équipe dans le même envoi que l'action ; jamais modifié.
+      allow create: if isStaff()
+        && request.resource.data.keys().hasOnly(['action', 'entity', 'entityId', 'actorUid', 'actorEmail', 'actorRole', 'at', 'before', 'after'])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorEmail == request.auth.token.email
+        && request.resource.data.actorRole == staffDoc().role
+        && request.resource.data.at == request.time
+        && shortText(request.resource.data.action, 60)
+        && shortText(request.resource.data.entity, 60)
+        && shortText(request.resource.data.entityId, 200);
+      allow update, delete: if false;
+    }
 
     // Tout le reste est fermé.
-    match /{document=**}         { allow read, write: if false; }
+    match /{document=**} { allow read, write: if false; }
   }
 }

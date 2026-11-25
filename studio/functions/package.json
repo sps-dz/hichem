@@ -10,7 +10,8 @@
     "build": "rm -rf build && tsc -p tsconfig.json",
     "test": "npm run build && node --test --test-concurrency=1 build/test/*.test.js",
     "serve": "npm run build && firebase emulators:start",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "firebase deploy --only functions",
+    "build:web": "esbuild src/web/studio-core.ts --bundle --format=esm --target=es2020 --legal-comments=none --banner:js=\"// Fichier généré par « npm run build:web » depuis functions/src/web/studio-core.ts — ne pas modifier à la main.\" --outfile=../web/lib/studio-core.js"
   },
   "dependencies": {
     "@google-cloud/firestore": "7.11.6",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@firebase-bridge/firestore-admin": "0.0.10",
     "@types/node": "22.19.1",
+    "esbuild": "0.25.12",
     "typescript": "5.9.3"
   }
 }

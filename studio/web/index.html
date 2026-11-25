@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio — Réserver</title>
+<link rel="stylesheet" href="lib/studio.css">
+</head>
+<body>
+<main>
+  <h1 id="studioName">Studio</h1>
+  <p class="mute">Réservez le studio ou commandez un shooting. Le prix s'affiche tout de suite ; votre demande est confirmée dès que l'acompte est reçu.</p>
+  <p id="provisional" class="note" hidden>Tarifs provisoires : ils peuvent encore changer avant la confirmation.</p>
+
+  <div id="loading" class="msg">Chargement des tarifs…</div>
+
+  <div id="shop" hidden>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+
+    <!-- Location du studio -->
+    <section data-tab="studio" hidden>
+      <h2>Location du studio</h2>
+      <div class="grid3">
+        <label>Date<input id="sDate" type="date"></label>
+        <label>Durée<select id="sDuration"></select></label>
+        <label>Heure de début<select id="sStart"></select></label>
+      </div>
+      <p class="mute small" id="sHours"></p>
+      <div id="sAddons" class="checks"></div>
+      <div class="pricebox" id="sPrice"></div>
+      <button class="primary" id="sAdd">Ajouter au panier</button>
+    </section>
+
+    <!-- Shooting produit -->
+    <section data-tab="product" hidden>
+      <h2>Shooting produit</h2>
+      <div class="grid3">
+        <label>Pack<select id="pPack"></select></label>
+        <label>Photos en plus<input id="pExtra" type="number" min="0" max="500" value="0"></label>
+      </div>
+      <div id="pAddons" class="checks"></div>
+      <div class="pricebox" id="pPrice"></div>
+      <button class="primary" id="pAdd">Ajouter au panier</button>
+    </section>
+
+    <!-- Vidéo -->
+    <section data-tab="video" hidden>
+      <h2>Shooting vidéo</h2>
+      <div class="grid3">
+        <label>Nombre de vidéos<input id="vReels" type="number" min="1" value="1"></label>
+        <label>Format<select id="vFormat"></select></label>
+      </div>
+      <p class="mute small" id="vTiers"></p>
+      <div id="vAddons" class="checks"></div>
+      <div class="pricebox" id="vPrice"></div>
+      <button class="primary" id="vAdd">Ajouter au panier</button>
+    </section>
+
+    <!-- Montage -->
+    <section data-tab="editing" hidden>
+      <h2>Montage vidéo</h2>
+      <div class="grid3">
+        <label>Durée de la vidéo<select id="eTier"></select></label>
+        <label>Révisions en plus<input id="eRev" type="number" min="0" max="20" value="0"></label>
+      </div>
+      <div class="checks"><label class="check"><input id="eSubs" type="checkbox"> <span id="eSubsLabel">Sous-titres</span></label></div>
+      <div class="pricebox" id="ePrice"></div>
+      <button class="primary" id="eAdd">Ajouter au panier</button>
+    </section>
+
+    <!-- Pub -->
+    <section data-tab="ad" hidden>
+      <h2>Production publicitaire</h2>
+      <p class="mute">Sur devis : décrivez votre projet, le studio vous répond avec un prix.</p>
+      <label>Votre projet<textarea id="aBrief" rows="4" maxlength="2000" placeholder="Ex. : pub de 30 s pour une marque de parfum, tournage en studio, 2 formats."></textarea></label>
+      <button class="primary" id="aAdd" style="margin-top:12px">Ajouter au panier</button>
+    </section>
+
+    <!-- Panier -->
+    <section id="cartBox">
+      <h2>Votre demande</h2>
+      <p class="mute" id="cartEmpty">Votre panier est vide.</p>
+      <div id="cartLines"></div>
+      <div id="cartTotals" class="totals" hidden></div>
+
+      <div id="contactForm" hidden>
+        <h2 style="margin-top:20px">Vos coordonnées</h2>
+        <div class="grid3">
+          <label>Nom et prénom<input id="cName" autocomplete="name" maxlength="80"></label>
+          <label>Téléphone<input id="cPhone" type="tel" autocomplete="tel" placeholder="0555 12 34 56"></label>
+        </div>
+        <label style="margin-top:8px">Message (facultatif)<textarea id="cNote" rows="2" maxlength="1000"></textarea></label>
+        <p class="mute small" id="holdInfo"></p>
+        <button class="primary big" id="send">Envoyer ma demande</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Demande envoyée -->
+  <section id="done" hidden>
+    <h2>Demande envoyée ✓</h2>
+    <p>Demande n° <strong id="dCode"></strong></p>
+    <div id="dSummary" class="totals"></div>
+    <div id="dWhatsapp" hidden>
+      <p><b>Dernière étape :</b> envoyez votre demande au studio sur WhatsApp. Le message est déjà écrit, il vous suffit d'appuyer sur « Envoyer ».</p>
+      <a class="button whatsapp big" id="dWaLink" target="_blank" rel="noopener">Envoyer sur WhatsApp</a>
+    </div>
+    <div id="dPay" class="note" hidden></div>
+    <p class="mute small">Gardez ce lien pour suivre votre demande :</p>
+    <div class="copyrow"><input id="dLink" readonly><button id="dCopy">Copier</button></div>
+    <div class="actions"><a class="button" id="dOpen">Ouvrir le suivi</a><button id="dNew">Nouvelle demande</button></div>
+  </section>
+
+  <div id="msg" class="msg" hidden></div>
+</main>
+
+<script type="module">
+  import { db, trackingUrl } from "./lib/firebase.js";
+  import { doc, getDoc, writeBatch, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+  import { priceCart, normalizeDzPhone, randomId, shortCode, fmtDA, whatsappLink, clientWhatsappText, buildClientOrder } from "./lib/studio-core.js";
+
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+  const show = (text, bad = false) => { const m = $("msg"); m.textContent = text; m.className = "msg" + (bad ? " bad" : ""); m.hidden = !text; };
+
+  let catalog = null;
+  let contact = { holdHours: 24 };
+  let cart = loadCart();
+  let busySlots = new Map(); // date → Set(HHMM) occupées
+
+  function loadCart() { try { return JSON.parse(localStorage.getItem("studio-cart") || "[]"); } catch { return []; } }
+  function saveCart() { try { localStorage.setItem("studio-cart", JSON.stringify(cart)); } catch { /* navigation privée */ } }
+
+  const TABS = [["studio", "Location studio"], ["product", "Shooting produit"], ["video", "Vidéo"], ["editing", "Montage"], ["ad", "Pub"]];
+  function selectTab(id) {
+    for (const b of $("tabs").children) b.setAttribute("aria-selected", String(b.dataset.id === id));
+    document.querySelectorAll("section[data-tab]").forEach((s) => (s.hidden = s.dataset.tab !== id));
+  }
+
+  const linePrice = (line) => { try { return { ok: true, p: priceCart(catalog, [line], Date.now()).lines[0] }; } catch (e) { return { ok: false, error: e.message }; } };
+  function renderPrice(box, line) {
+    const r = linePrice(line);
+    box.replaceChildren();
+    if (!r.ok) { box.append(el("span", { className: "bad", textContent: r.error })); return false; }
+    for (const d of r.p.details) box.append(el("div", { className: "detail" }, el("span", { textContent: d.label }), el("span", { textContent: fmtDA(d.amount) })));
+    box.append(el("div", { className: "detail strong" }, el("span", { textContent: "Prix" }), el("span", { textContent: r.p.price === null ? "sur devis" : fmtDA(r.p.price) })));
+    return true;
+  }
+  function checks(container, addons) {
+    container.replaceChildren(...addons.map((a) => el("label", { className: "check" }, el("input", { type: "checkbox", value: a.id }), ` ${a.name} (+${fmtDA(a.price)})`)));
+  }
+  const checked = (container) => [...container.querySelectorAll("input:checked")].map((i) => i.value);
+
+  // ---------- Location studio ----------
+  const today = () => new Date(Date.now() + 3600e3).toISOString().slice(0, 10); // date d'Alger (UTC+1)
+  const hmToMin = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+  const minToHm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+
+  // Tranches occupées du jour (days/{date}). Un blocage expiré reste affiché
+  // occupé tant que l'équipe ne l'a pas libéré.
+  async function loadBusy(date) {
+    const snap = await getDoc(doc(db, "days", date));
+    busySlots.set(date, new Set(snap.exists() ? Object.keys(snap.data().slots || {}) : []));
+  }
+
+  function studioLine(start) {
+    return { service: "studio", date: $("sDate").value, start, durationMinutes: Number($("sDuration").value), addons: checked($("sAddons")) };
+  }
+
+  async function refreshStarts() {
+    const date = $("sDate").value;
+    const st = catalog.studio;
+    const sel = $("sStart");
+    const prev = sel.value;
+    sel.replaceChildren();
+    if (!date) return;
+    const dow = new Date(date + "T12:00:00Z").getUTCDay();
+    const hours = st.openingHours[String(dow)];
+    const closed = !hours || st.specialDates.some((s) => s.date === date && s.kind === "closed");
+    $("sHours").textContent = closed ? "Le studio est fermé ce jour-là." : `Ouvert de ${hours.open} à ${hours.close}. Les heures déjà réservées n'apparaissent pas.`;
+    if (closed) { renderPrice($("sPrice"), studioLine("00:00")); return; }
+    if (!busySlots.has(date)) { sel.append(new Option("Chargement…", "")); await loadBusy(date).catch((e) => show(e.message, true)); sel.replaceChildren(); }
+    const busy = busySlots.get(date) || new Set();
+    for (let m = hmToMin(hours.open); m + Number($("sDuration").value) <= hmToMin(hours.close); m += st.stepMinutes) {
+      const r = linePrice(studioLine(minToHm(m)));
+      if (!r.ok) continue; // passé, hors horaires…
+      if (r.p.slotKeys.some((k) => busy.has(k.slice(11)))) continue;
+      sel.append(new Option(`${minToHm(m)} → ${r.p.booking.end} · ${fmtDA(r.p.price)}`, minToHm(m)));
+    }
+    if (!sel.options.length) sel.append(new Option("Aucun horaire libre ce jour-là", ""));
+    if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+    refreshStudioPrice();
+  }
+  function refreshStudioPrice() {
+    const start = $("sStart").value;
+    $("sAdd").disabled = !start || !renderPrice($("sPrice"), studioLine(start || "00:00"));
+    if (!start) $("sPrice").replaceChildren();
+  }
+
+  function initStudio() {
+    const st = catalog.studio;
+    $("sDate").min = today();
+    if (!$("sDate").value) $("sDate").value = today();
+    const dur = $("sDuration");
+    dur.replaceChildren();
+    for (let m = st.minMinutes; m <= 14 * 60; m += st.stepMinutes) dur.append(new Option(m % 60 ? `${Math.floor(m / 60)} h ${m % 60}` : `${m / 60} h`, String(m)));
+    checks($("sAddons"), st.addons || []);
+    $("sDate").onchange = () => refreshStarts();
+    dur.onchange = () => refreshStarts();
+    $("sStart").onchange = refreshStudioPrice;
+    $("sAddons").onchange = () => refreshStarts();
+    $("sAdd").onclick = () => addLine(studioLine($("sStart").value));
+    refreshStarts();
+  }
+
+  // ---------- Autres services ----------
+  function initOthers() {
+    const pr = catalog.product, vi = catalog.video, ed = catalog.editing;
+    $("pPack").replaceChildren(...pr.packages.map((p) => new Option(`${p.name} — ${fmtDA(p.price)}`, p.id)));
+    checks($("pAddons"), pr.addons || []);
+    const pLine = () => ({ service: "product", packageId: $("pPack").value, extraPhotos: Math.max(0, Math.floor(Number($("pExtra").value) || 0)), addons: checked($("pAddons")) });
+    const pRefresh = () => ($("pAdd").disabled = !renderPrice($("pPrice"), pLine()));
+    $("pPack").onchange = $("pExtra").oninput = $("pAddons").onchange = pRefresh;
+    $("pAdd").onclick = () => addLine(pLine());
+    pRefresh();
+
+    $("vFormat").replaceChildren(...vi.formats.map((f) => new Option(f, f)));
+    $("vReels").max = String(vi.maxReels);
+    $("vTiers").textContent = vi.volumeTiers.map((t) => `−${t.percent} % dès ${t.minQty} vidéos`).join(" · ");
+    checks($("vAddons"), vi.addons || []);
+    const vLine = () => ({ service: "video", reels: Math.floor(Number($("vReels").value) || 0), format: $("vFormat").value, addons: checked($("vAddons")) });
+    const vRefresh = () => ($("vAdd").disabled = !renderPrice($("vPrice"), vLine()));
+    $("vReels").oninput = $("vFormat").onchange = $("vAddons").onchange = vRefresh;
+    $("vAdd").onclick = () => addLine(vLine());
+    vRefresh();
+
+    $("eTier").replaceChildren(...ed.durationTiers.map((t) => new Option(`Jusqu'à ${t.maxSeconds >= 60 ? t.maxSeconds / 60 + " min" : t.maxSeconds + " s"} — ${fmtDA(t.price)}`, String(t.maxSeconds))));
+    $("eSubsLabel").textContent = `Sous-titres (+${fmtDA(ed.subtitlesPrice)})`;
+    const eLine = () => ({ service: "editing", videos: [{ seconds: Number($("eTier").value), subtitles: $("eSubs").checked, extraRevisions: Math.max(0, Math.floor(Number($("eRev").value) || 0)) }] });
+    const eRefresh = () => ($("eAdd").disabled = !renderPrice($("ePrice"), eLine()));
+    $("eTier").onchange = $("eSubs").onchange = $("eRev").oninput = eRefresh;
+    $("eAdd").onclick = () => addLine(eLine());
+    eRefresh();
+
+    $("aAdd").onclick = () => addLine({ service: "ad", brief: $("aBrief").value.trim() });
+  }
+
+  // ---------- Panier ----------
+  function addLine(line) {
+    const r = linePrice(line);
+    if (!r.ok) return show(r.error, true);
+    try { priceCart(catalog, [...cart, line], Date.now()); } catch (e) { return show(e.message, true); }
+    cart.push(line); saveCart(); show(""); renderCart();
+    $("cartBox").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function cartPricing() {
+    if (!cart.length) return null;
+    try { return priceCart(catalog, cart, Date.now()); } catch (e) { return { error: e.message }; }
+  }
+
+  function renderCart() {
+    const p = cartPricing();
+    $("cartEmpty").hidden = cart.length > 0;
+    $("contactForm").hidden = !cart.length;
+    $("cartTotals").hidden = !p || !!p.error;
+    const box = $("cartLines");
+    box.replaceChildren();
+    cart.forEach((line, i) => {
+      const priced = p && !p.error ? p.lines[i] : null;
+      const del = el("button", { className: "link", textContent: "Retirer" });
+      del.onclick = () => { cart.splice(i, 1); saveCart(); renderCart(); };
+      box.append(el("div", { className: "cartline" },
+        el("span", { textContent: priced ? priced.label : line.service }),
+        el("span", { textContent: priced ? (priced.price === null ? "sur devis" : fmtDA(priced.price)) : "" }),
+        del));
+    });
+    if (p && p.error) { show(p.error + " Retirez la ligne concernée.", true); $("send").disabled = true; return; }
+    $("send").disabled = !cart.length;
+    if (!p) return;
+    $("cartTotals").replaceChildren(...totalsRows(p));
+    const hasStudio = p.lines.some((l) => l.slotKeys && l.slotKeys.length);
+    $("holdInfo").textContent = hasStudio ? `Le créneau vous est réservé pendant ${contact.holdHours} h, le temps de verser l'acompte.` : "";
+  }
+
+  function totalsRows(p) {
+    const row = (a, b, cls = "") => el("div", { className: "detail " + cls }, el("span", { textContent: a }), el("span", { textContent: b }));
+    if (p.total === null) return [row("Sous-total", fmtDA(p.subtotal)), row("Total", "sur devis (le studio vous envoie le prix)", "strong")];
+    const out = [row("Sous-total", fmtDA(p.subtotal))];
+    if (p.discount) out.push(row(p.discount.name, "−" + fmtDA(p.discount.amount)));
+    out.push(row("Total", fmtDA(p.total), "strong"), row(`Acompte à verser (${p.depositPercent} %)`, fmtDA(p.deposit)), row("Reste à payer au studio", fmtDA(p.remaining)));
+    return out;
+  }
+
+  // ---------- Envoi ----------
+  $("send").onclick = async () => {
+    const btn = $("send");
+    let phone;
+    const name = $("cName").value.trim().replace(/\s+/g, " ");
+    if (name.length < 2) return show("Indiquez votre nom.", true);
+    try { phone = normalizeDzPhone($("cPhone").value).e164; } catch (e) { return show(e.message, true); }
+    const pricing = cartPricing();
+    if (!pricing || pricing.error) return show(pricing?.error || "Panier vide.", true);
+
+    btn.disabled = true; show("Envoi…");
+    const orderId = randomId(20), trackingToken = randomId(32);
+    const built = buildClientOrder({ orderId, trackingToken, name, phone, note: $("cNote").value.trim(), pricing, holdExpiresAtMs: Date.now() + contact.holdHours * 3600e3 });
+    const hold = built.holdExpiresAtMs ? Timestamp.fromMillis(built.holdExpiresAtMs) : null;
+    const batch = writeBatch(db);
+    batch.set(doc(db, "orders", orderId), { ...built.order, ...(hold ? { holdExpiresAt: hold } : {}), createdAt: serverTimestamp() });
+    batch.set(doc(db, "tracking", trackingToken), { ...built.tracking, holdExpiresAt: hold, createdAt: serverTimestamp() });
+    for (const [date, hms] of Object.entries(built.slots)) {
+      const entries = Object.fromEntries(hms.map((hm) => [hm, { o: orderId, s: "hold", u: hold }]));
+      batch.set(doc(db, "days", date), { date, slots: entries, lastOrderId: orderId, updatedAt: serverTimestamp() }, { merge: true });
+    }
+    try {
+      await batch.commit();
+    } catch (e) {
+      btn.disabled = false;
+      busySlots.clear();
+      if (e.code === "permission-denied" && built.slotKeys.length) {
+        show("Ce créneau vient d'être pris par quelqu'un d'autre (ou les tarifs ont changé). Choisissez un autre horaire.", true);
+        cart = cart.filter((l) => l.service !== "studio"); saveCart(); renderCart(); selectTab("studio"); refreshStarts();
+      } else if (e.code === "permission-denied") {
+        show("Les tarifs viennent d'être mis à jour : rechargez la page puis renvoyez votre demande.", true);
+      } else {
+        show("Envoi impossible : " + (e.message || e), true);
+      }
+      return;
+    }
+    cart = []; saveCart(); show("");
+    showDone({ orderId, trackingToken, name, pricing });
+  };
+
+  function showDone({ orderId, trackingToken, name, pricing }) {
+    const url = trackingUrl(trackingToken);
+    $("shop").hidden = true; $("done").hidden = false;
+    $("dCode").textContent = shortCode(orderId);
+    $("dSummary").replaceChildren(...pricing.lines.map((l) => el("div", { className: "detail" }, el("span", { textContent: l.label }), el("span", { textContent: l.price === null ? "sur devis" : fmtDA(l.price) }))), ...totalsRows(pricing));
+    $("dLink").value = url;
+    $("dOpen").href = url;
+    if (contact.whatsapp) {
+      $("dWaLink").href = whatsappLink(contact.whatsapp, clientWhatsappText({ code: shortCode(orderId), name, pricing, trackingUrl: url }));
+      $("dWhatsapp").hidden = false;
+    }
+    const pay = [contact.depositNote, contact.baridimob && "BaridiMob : " + contact.baridimob, contact.ccp && "CCP : " + contact.ccp].filter(Boolean);
+    if (pricing.deposit && pay.length) { $("dPay").textContent = `Acompte de ${fmtDA(pricing.deposit)} à verser.\n` + pay.join("\n"); $("dPay").hidden = false; }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  $("dCopy").onclick = async () => { try { await navigator.clipboard.writeText($("dLink").value); $("dCopy").textContent = "Copié ✓"; } catch { $("dLink").select(); } };
+  $("dNew").onclick = () => location.reload();
+
+  // ---------- Démarrage ----------
+  try {
+    const [c, k] = await Promise.all([getDoc(doc(db, "publicSettings", "catalog")), getDoc(doc(db, "publicSettings", "contact"))]);
+    if (!c.exists()) throw new Error("Les tarifs ne sont pas encore publiés. Revenez bientôt.");
+    catalog = c.data().catalog;
+    if (k.exists()) contact = { ...contact, ...k.data() };
+    if (contact.studioName) { $("studioName").textContent = contact.studioName; document.title = contact.studioName + " — Réserver"; }
+    $("provisional").hidden = !catalog.provisional;
+    const enabled = TABS.filter(([id]) => catalog[id].enabled);
+    $("tabs").replaceChildren(...enabled.map(([id, label]) => { const b = el("button", { textContent: label, role: "tab" }); b.dataset.id = id; b.onclick = () => selectTab(id); return b; }));
+    // Panier gardé d'une visite précédente : on retire ce qui n'est plus valable.
+    cart = cart.filter((l) => linePrice(l).ok);
+    saveCart();
+    initStudio(); initOthers();
+    selectTab(enabled[0]?.[0]);
+    $("loading").hidden = true; $("shop").hidden = false;
+    renderCart();
+  } catch (e) {
+    $("loading").textContent = e.message || String(e);
+    $("loading").className = "msg bad";
+  }
+</script>
+</body>
+</html>

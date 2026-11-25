@@ -1,7 +1,7 @@
 // =====================================================================
 //  STUDIO-PLATFORM.JS — onglet « Plateforme en ligne » du groupe Studio
 //  Relie le CRM à la nouvelle plateforme du studio (dossier studio/ du dépôt).
-//  La plateforme a sa propre base Firebase, fermée et vérifiée côté serveur :
+//  La plateforme a sa propre base Firebase (forfait gratuit Spark, protégée par ses règles) :
 //  cet onglet ne lit ni n'écrit rien dans les données du CRM.
 //  Les onglets « Rendez-vous studio » et « Shooting produits » restent inchangés.
 // =====================================================================
@@ -12,6 +12,7 @@
   var S = window.ExtStore;
 
   var DEFAULT_URL = 'studio/web/admin/';
+  var CLIENT_URL = 'studio/web/';
 
   function platformUrl() {
     var u = S && S.get ? S.get('studioPlatformUrl', '') : '';
@@ -29,18 +30,21 @@
     ['Audit et architecture', 'done'],
     ['Base de données et comptes', 'done'],
     ['Catalogue et moteur de prix', 'done'],
-    ['Site client et configurateur', 'next'],
-    ['Panier et promotions', ''],
-    ['Réservations et disponibilités', ''],
-    ['WhatsApp et notifications', ''],
-    ['Acomptes et paiements', ''],
-    ['Tableau de bord admin', ''],
+    ['Site client et configurateur', 'done'],
+    ['Panier et promotions', 'done'],
+    ['Réservations et disponibilités', 'done'],
+    ['WhatsApp (bouton, envoi manuel)', 'done'],
+    ['Acomptes et paiements', 'done'],
+    ['Tableau de bord admin', 'next'],
     ['Finance', ''],
     ['Tests, sécurité, mise en production', '']
   ];
 
   window.stpOpen = function () {
     window.open(safeUrl(platformUrl()), '_blank', 'noopener');
+  };
+  window.stpOpenClient = function () {
+    window.open(CLIENT_URL, '_blank', 'noopener');
   };
   window.stpSaveUrl = function () {
     if (!X.isAdmin()) return X.toast('Réservé à l\'administrateur', 'warning');
@@ -90,22 +94,23 @@
       '<p class="text-xs text-gray-500 mt-1">Réservations, prix et paiements du studio en ligne. Sa base de données est séparée et protégée : rien ici ne modifie les données du CRM.</p></div>' +
       '<div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">' +
         X.kpi('Phases livrées', done + ' / ' + PHASES.length, 'text-indigo-600', 'fa-list-check') +
-        X.kpi('Prochaine étape', 'Site client', '', 'fa-mobile-screen') +
-        X.kpi('Mise en ligne', 'Projet Firebase à créer', 'text-amber-600', 'fa-cloud') +
+        X.kpi('Forfait Firebase', 'Spark (gratuit)', 'text-green-600', 'fa-cloud') +
+        X.kpi('Mise en ligne', 'À déployer sur sponsorhichem', 'text-amber-600', 'fa-rocket') +
       '</div>' +
       X.card('Espace Équipe et tarifs', 'fa-users-gear',
-        '<p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Devenir administrateur, gérer les comptes de l\'équipe et <b>modifier les tarifs du studio</b> (forfait par jour et par tranche, options). Connexion avec votre compte Google.</p>' +
+        '<p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Demandes des clients, <b>acomptes</b>, bouton WhatsApp vers le client, équipe et <b>tarifs du studio</b> (forfait par jour et par tranche, options). Connexion avec votre compte Google.</p>' +
         '<div class="flex flex-wrap gap-2">' + X.btn('Ouvrir dans un nouvel onglet', 'stpOpen()', null, 'fa-arrow-up-right-from-square') +
+        X.btn('Site client', 'stpOpenClient()', 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-100', 'fa-mobile-screen') +
         X.btn('Afficher ici', 'stpToggleFrame()', 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-100', 'fa-window-maximize') + '</div>' +
         '<p class="text-[11px] text-gray-400 mt-2">Adresse : ' + E(url) + '</p>' +
         '<div id="stpFrameWrap" class="mt-4"></div>' + settings) +
       X.card('Avancement', 'fa-road', X.table([['#', 'l'], ['Phase', 'l'], ['État', 'r']], phases)) +
       X.card('Mise en place', 'fa-screwdriver-wrench',
         '<ol class="list-decimal pl-5 text-sm text-gray-600 dark:text-gray-300 space-y-1">' +
-        '<li>Créer le projet Firebase du studio au forfait Blaze, avec un plafond de dépenses.</li>' +
-        '<li>Suivre le guide <b>studio/README.md</b> (10 étapes) et coller la configuration dans <b>studio/web/admin/index.html</b>.</li>' +
+        '<li>Projet Firebase <b>sponsorhichem</b>, forfait gratuit Spark (pas de carte bancaire) : vérifier ses données existantes, puis suivre le guide <b>studio/README.md</b>.</li>' +
+        '<li>Déployer depuis le dossier studio/ : <b>firebase deploy --only firestore,hosting</b>.</li>' +
         '<li>Dans Firebase → Authentication → Paramètres → Domaines autorisés, ajouter <b>' + E(location.hostname) + '</b>.</li>' +
-        '<li>Ouvrir l\'espace Équipe et cliquer « Devenir administrateur ».</li></ol>');
+        '<li>Ouvrir l\'espace Équipe : « Devenir administrateur », « Publier les tarifs provisoires », puis le numéro WhatsApp du studio.</li></ol>');
   }
 
   X.registerTab('studioPlatform', {
