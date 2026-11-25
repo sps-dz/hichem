@@ -186,6 +186,7 @@
   // ---------- Connexion ----------
   $("google").onclick = (e) => busy(e.target, async () => {
     const provider = new GoogleAuthProvider();
+    provider.addScope("email"); // l'adresse e-mail est indispensable pour les règles
     provider.setCustomParameters({ prompt: "select_account" }); // toujours choisir le compte
     try {
       await signInWithPopup(auth, provider);
@@ -602,9 +603,11 @@
       const uid = user.uid;
       await signOut(auth);
       if (providers.includes("google.com")) {
-        // Compte Google rattaché autrefois à un compte anonyme, resté sans e-mail principal.
-        show(`Ce compte Google est rattaché à un ancien compte Firebase sans e-mail (identifiant ${uid}).\n` +
-          "Solution : console Firebase → Authentication → Utilisateurs → chercher cet identifiant → Supprimer le compte, puis se reconnecter ici avec Google.", true);
+        // Firebase n'a pas donné l'e-mail au compte Google : c'est le cas quand le projet
+        // autorise « plusieurs comptes par adresse e-mail ».
+        show(`Firebase a ouvert un compte Google sans adresse e-mail (identifiant ${uid}).\n` +
+          "Réglage à changer : console Firebase → Authentication → Paramètres → Association de comptes utilisateur → choisir « Associer les comptes qui utilisent la même adresse e-mail » → Enregistrer.\n" +
+          "Ensuite : Authentication → Utilisateurs → supprimer les comptes Google sans adresse e-mail, puis se reconnecter ici avec Google.", true);
       } else {
         show(`Une ancienne session sans e-mail (connexion ${how}, identifiant ${uid}) était ouverte dans ce navigateur : elle a été fermée. Connectez-vous avec Google.`, true);
       }
