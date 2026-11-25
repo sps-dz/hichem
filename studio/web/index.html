@@ -20,12 +20,33 @@
     <!-- Location du studio -->
     <section data-tab="studio" hidden>
       <h2>Location du studio</h2>
-      <div class="grid3">
-        <label>Date<input id="sDate" type="date"></label>
-        <label>Durée<select id="sDuration"></select></label>
-        <label>Heure de début<select id="sStart"></select></label>
+      <p class="mute small" style="margin:-4px 0 12px"><b>1.</b> Choisissez un jour. <b>2.</b> Touchez l'heure de début, puis l'heure de fin.</p>
+      <div class="pickgrid">
+        <div>
+          <div class="calhead">
+            <button type="button" id="sPrev" aria-label="Mois précédent">‹</button>
+            <b id="sMonth"></b>
+            <button type="button" id="sNext" aria-label="Mois suivant">›</button>
+          </div>
+          <div class="cal" id="sCal"></div>
+          <div class="legend">
+            <span><i class="dot free"></i>Libre</span>
+            <span><i class="dot part"></i>En partie réservé</span>
+            <span><i class="dot full"></i>Complet</span>
+          </div>
+        </div>
+        <div>
+          <p class="daytitle" id="sDayTitle">Choisissez un jour</p>
+          <p class="mute small" id="sHours"></p>
+          <div class="hours" id="sSlots"></div>
+          <div class="legend" id="sSlotLegend" hidden>
+            <span><i class="dot free"></i>Libre</span>
+            <span><i class="dot sel"></i>Votre choix</span>
+            <span><i class="dot full"></i>Déjà réservé</span>
+          </div>
+          <p class="rangebox" id="sRange" hidden></p>
+        </div>
       </div>
-      <p class="mute small" id="sHours"></p>
       <h2 id="sOptTitle" style="margin-top:16px">Options</h2>
       <p class="mute small" style="margin:-8px 0 0">Cochez ce que vous voulez : le prix se met à jour à chaque case.</p>
       <div id="sAddons" class="checks"></div>
@@ -119,7 +140,7 @@
 
 <script type="module">
   import { db, trackingUrl } from "./lib/firebase.js";
-  import { doc, getDoc, writeBatch, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+  import { doc, getDoc, getDocs, collection, query, where, writeBatch, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
   import { priceCart, normalizeDzPhone, randomId, shortCode, fmtDA, whatsappLink, clientWhatsappText, buildClientOrder } from "./lib/studio-core.js";
 
   const $ = (id) => document.getElementById(id);
@@ -164,66 +185,199 @@
   const checked = (container) => [...container.querySelectorAll("input:checked")].map((i) => i.value);
 
   // ---------- Location studio ----------
-  const today = () => new Date(Date.now() + 3600e3).toISOString().slice(0, 10); // date d'Alger (UTC+1)
+  // Calendrier du mois (jours complets en rouge, non cliquables) puis une case
+  // par tranche horaire : le client touche l'heure de début puis l'heure de fin.
+  const algiersNow = () => new Date(Date.now() + 3600e3); // heure d'Alger (UTC+1), lue en UTC
+  const today = () => algiersNow().toISOString().slice(0, 10);
   const hmToMin = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
   const minToHm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  const hhmm = (m) => minToHm(m).replace(":", "");
+  const ymd = (y, mo, d) => new Date(Date.UTC(y, mo, d)).toISOString().slice(0, 10);
+  const durLabel = (m) => (m % 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m / 60} h`);
+  const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+  const WEEKDAYS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+  const WEEKDAYS_LONG = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+  const MONTHS_AHEAD = 6;
 
-  // Tranches occupées du jour (days/{date}). Un blocage expiré reste affiché
-  // occupé tant que l'équipe ne l'a pas libéré.
-  async function loadBusy(date) {
-    const snap = await getDoc(doc(db, "days", date));
-    busySlots.set(date, new Set(snap.exists() ? Object.keys(snap.data().slots || {}) : []));
+  const sel = { date: "", start: null, end: null, waitingEnd: false };
+  let calMonth = null; // { y, m }
+  const loadedMonths = new Set();
+
+  // Tranches occupées (days/{date}) d'un mois entier, en une seule lecture.
+  // Un blocage expiré reste affiché occupé tant que l'équipe ne l'a pas libéré.
+  async function loadMonth(y, m) {
+    const key = `${y}-${m}`;
+    if (loadedMonths.has(key)) return;
+    const first = ymd(y, m, 1), last = ymd(y, m + 1, 0);
+    const snap = await getDocs(query(collection(db, "days"), where("date", ">=", first), where("date", "<=", last)));
+    for (let d = 1; d <= Number(last.slice(8)); d++) busySlots.set(ymd(y, m, d), new Set());
+    snap.forEach((s) => busySlots.set(s.id, new Set(Object.keys(s.data().slots || {}))));
+    loadedMonths.add(key);
   }
 
-  function studioLine(start) {
-    return { service: "studio", date: $("sDate").value, start, durationMinutes: Number($("sDuration").value), addons: checked($("sAddons")) };
-  }
-
-  async function refreshStarts() {
-    const date = $("sDate").value;
+  /** Horaires et tranches du jour ({ m, state: free | busy | past }), ou null si fermé. */
+  function dayBlocks(date) {
     const st = catalog.studio;
-    const sel = $("sStart");
-    const prev = sel.value;
-    sel.replaceChildren();
-    if (!date) return;
     const dow = new Date(date + "T12:00:00Z").getUTCDay();
     const hours = st.openingHours[String(dow)];
-    const closed = !hours || st.specialDates.some((s) => s.date === date && s.kind === "closed");
-    $("sHours").textContent = closed ? "Le studio est fermé ce jour-là." : `Ouvert de ${hours.open} à ${hours.close}. Les heures déjà réservées n'apparaissent pas.`;
-    if (closed) { renderPrice($("sPrice"), studioLine("00:00")); return; }
-    if (!busySlots.has(date)) { sel.append(new Option("Chargement…", "")); await loadBusy(date).catch((e) => show(e.message, true)); sel.replaceChildren(); }
+    if (!hours || st.specialDates.some((s) => s.date === date && s.kind === "closed")) return null;
     const busy = busySlots.get(date) || new Set();
-    for (let m = hmToMin(hours.open); m + Number($("sDuration").value) <= hmToMin(hours.close); m += st.stepMinutes) {
-      const r = linePrice(studioLine(minToHm(m)));
-      if (!r.ok) continue; // passé, hors horaires…
-      if (r.p.slotKeys.some((k) => busy.has(k.slice(11)))) continue;
-      sel.append(new Option(`${minToHm(m)} → ${r.p.booking.end} · ${fmtDA(r.p.price)}`, minToHm(m)));
+    const now = algiersNow();
+    const nowMin = date === today() ? now.getUTCHours() * 60 + now.getUTCMinutes() : date < today() ? Infinity : -1;
+    const blocks = [];
+    for (let m = hmToMin(hours.open); m + st.stepMinutes <= hmToMin(hours.close); m += st.stepMinutes) {
+      blocks.push({ m, state: m < nowMin ? "past" : busy.has(hhmm(m)) ? "busy" : "free" });
     }
-    if (!sel.options.length) sel.append(new Option("Aucun horaire libre ce jour-là", ""));
-    if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+    return { hours, blocks };
+  }
+  const isFreeRange = (blocks, from, to) => {
+    const inRange = blocks.filter((b) => b.m >= from && b.m < to);
+    return inRange.length > 0 && inRange.length * catalog.studio.stepMinutes === to - from && inRange.every((b) => b.state === "free");
+  };
+  /** closed | past | full | part | free */
+  function dayStatus(date) {
+    if (date < today()) return "past";
+    const day = dayBlocks(date);
+    if (!day) return "closed";
+    const st = catalog.studio;
+    const need = Math.ceil(st.minMinutes / st.stepMinutes);
+    let run = 0, best = 0;
+    for (const b of day.blocks) { run = b.state === "free" ? run + 1 : 0; best = Math.max(best, run); }
+    if (best < need) return "full";
+    return day.blocks.some((b) => b.state === "busy") ? "part" : "free";
+  }
+
+  function studioLine() {
+    return { service: "studio", date: sel.date, start: minToHm(sel.start ?? 0), durationMinutes: (sel.end ?? 0) - (sel.start ?? 0), addons: checked($("sAddons")) };
+  }
+
+  async function renderCalendar() {
+    const { y, m } = calMonth;
+    const t = today();
+    const idx = (o) => o.y * 12 + o.m;
+    const minIdx = Number(t.slice(0, 4)) * 12 + Number(t.slice(5, 7)) - 1;
+    $("sMonth").textContent = `${MONTHS[m]} ${y}`;
+    $("sPrev").disabled = idx(calMonth) <= minIdx;
+    $("sNext").disabled = idx(calMonth) >= minIdx + MONTHS_AHEAD;
+    const cal = $("sCal");
+    if (!loadedMonths.has(`${y}-${m}`)) {
+      cal.replaceChildren(el("p", { className: "mute small calwait", textContent: "Chargement des disponibilités…" }));
+      try { await loadMonth(y, m); } catch (e) { cal.replaceChildren(el("p", { className: "bad small calwait", textContent: "Disponibilités indisponibles : " + (e.message || e) })); return; }
+      if (calMonth.y !== y || calMonth.m !== m) return; // le client a changé de mois entre-temps
+    }
+    const cells = WEEKDAYS.map((w) => el("span", { className: "calwd", textContent: w }));
+    const firstDow = new Date(Date.UTC(y, m, 1)).getUTCDay();
+    for (let i = 0; i < firstDow; i++) cells.push(el("span"));
+    const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const titles = { closed: "Fermé", past: "Passé", full: "Complet", part: "En partie réservé", free: "Libre" };
+    for (let d = 1; d <= days; d++) {
+      const date = ymd(y, m, d);
+      const status = dayStatus(date);
+      const b = el("button", { type: "button", textContent: String(d), title: titles[status],
+        className: `calday ${status}` + (date === sel.date ? " on" : "") + (date === t ? " today" : "") });
+      b.disabled = status === "closed" || status === "past" || status === "full";
+      b.setAttribute("aria-label", `${d} ${MONTHS[m]} : ${titles[status]}`);
+      b.onclick = () => pickDay(date);
+      cells.push(b);
+    }
+    cal.replaceChildren(...cells);
+  }
+
+  function pickDay(date) {
+    sel.date = date; sel.start = sel.end = null; sel.waitingEnd = false;
+    show("");
+    renderCalendar();
+    renderSlots();
+  }
+
+  function renderSlots() {
+    const box = $("sSlots");
+    $("sSlotLegend").hidden = !sel.date;
+    if (!sel.date) { box.replaceChildren(); $("sDayTitle").textContent = "Choisissez un jour"; $("sHours").textContent = ""; refreshStudioPrice(); return; }
+    const d = new Date(sel.date + "T12:00:00Z");
+    $("sDayTitle").textContent = `${WEEKDAYS_LONG[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+    const day = dayBlocks(sel.date);
+    if (!day) { $("sHours").textContent = "Le studio est fermé ce jour-là."; box.replaceChildren(); refreshStudioPrice(); return; }
+    const st = catalog.studio;
+    $("sHours").textContent = `Ouvert de ${day.hours.open} à ${day.hours.close} · minimum ${durLabel(st.minMinutes)}. Les cases rouges sont déjà réservées.`;
+    box.replaceChildren(...day.blocks.map((b) => {
+      const chosen = sel.start !== null && b.m >= sel.start && b.m < sel.end;
+      const chip = el("button", { type: "button", className: `slot ${b.state}` + (chosen ? " on" : ""), textContent: `${minToHm(b.m)} – ${minToHm(b.m + st.stepMinutes)}` });
+      chip.disabled = b.state !== "free";
+      chip.title = b.state === "busy" ? "Déjà réservé" : b.state === "past" ? "Heure passée" : "";
+      chip.onclick = () => pickBlock(b.m, day.blocks);
+      return chip;
+    }));
     refreshStudioPrice();
   }
+
+  // 1er toucher : heure de début (la durée minimale est prise d'office) ;
+  // 2e toucher : heure de fin (la case touchée est incluse). Toucher avant le
+  // début le déplace ; un nouveau toucher après une sélection complète recommence.
+  function pickBlock(m, blocks) {
+    const st = catalog.studio;
+    show("");
+    if (sel.start !== null && sel.waitingEnd) {
+      if (m >= sel.start) {
+        const end = Math.max(m + st.stepMinutes, sel.start + st.minMinutes);
+        if (isFreeRange(blocks, sel.start, end)) { sel.end = end; sel.waitingEnd = false; return renderSlots(); }
+        return show("Une partie de ces heures est déjà réservée : choisissez une fin plus tôt ou un autre début.", true);
+      }
+      if (isFreeRange(blocks, m, sel.end)) { sel.start = m; sel.waitingEnd = false; return renderSlots(); }
+    }
+    const end = m + st.minMinutes;
+    if (!isFreeRange(blocks, m, end)) {
+      return show(`Il faut au moins ${durLabel(st.minMinutes)} de libre à partir de ${minToHm(m)}. Choisissez une autre heure de début.`, true);
+    }
+    sel.start = m; sel.end = end; sel.waitingEnd = true;
+    renderSlots();
+  }
+
   function refreshStudioPrice() {
-    const start = $("sStart").value;
-    $("sAdd").disabled = !start || !renderPrice($("sPrice"), studioLine(start || "00:00"));
-    if (!start) $("sPrice").replaceChildren();
+    const ready = Boolean(sel.date) && sel.start !== null && sel.end !== null;
+    const range = $("sRange");
+    range.hidden = !ready;
+    if (ready) {
+      range.replaceChildren(el("b", { textContent: `De ${minToHm(sel.start)} à ${minToHm(sel.end)}` }), ` · ${durLabel(sel.end - sel.start)}`,
+        el("span", { className: "mute small", textContent: sel.waitingEnd ? " — touchez une autre case pour choisir l'heure de fin." : " — touchez une case pour recommencer." }));
+    }
+    $("sAdd").disabled = !ready || !renderPrice($("sPrice"), studioLine());
+    if (!ready) $("sPrice").replaceChildren(el("span", { className: "mute", textContent: sel.date ? "Touchez l'heure de début dans la liste des heures." : "Choisissez d'abord un jour dans le calendrier." }));
+  }
+
+  // Recharge les disponibilités (après un conflit) en gardant le jour choisi s'il reste libre.
+  async function refreshStarts() {
+    loadedMonths.clear(); busySlots.clear();
+    sel.start = sel.end = null; sel.waitingEnd = false;
+    await renderCalendar();
+    if (sel.date && ["closed", "past", "full"].includes(dayStatus(sel.date))) sel.date = "";
+    renderCalendar();
+    renderSlots();
   }
 
   function initStudio() {
     const st = catalog.studio;
-    $("sDate").min = today();
-    if (!$("sDate").value) $("sDate").value = today();
-    const dur = $("sDuration");
-    dur.replaceChildren();
-    for (let m = st.minMinutes; m <= 14 * 60; m += st.stepMinutes) dur.append(new Option(m % 60 ? `${Math.floor(m / 60)} h ${m % 60}` : `${m / 60} h`, String(m)));
+    const t = today();
+    calMonth = { y: Number(t.slice(0, 4)), m: Number(t.slice(5, 7)) - 1 };
+    const move = (delta) => { const i = calMonth.y * 12 + calMonth.m + delta; calMonth = { y: Math.floor(i / 12), m: i % 12 }; renderCalendar(); };
+    $("sPrev").onclick = () => move(-1);
+    $("sNext").onclick = () => move(1);
     checks($("sAddons"), st.addons || []);
     $("sOptTitle").hidden = !(st.addons || []).length;
-    $("sDate").onchange = () => refreshStarts();
-    dur.onchange = () => refreshStarts();
-    $("sStart").onchange = refreshStudioPrice;
-    $("sAddons").onchange = () => refreshStarts();
-    $("sAdd").onclick = () => addLine(studioLine($("sStart").value));
-    refreshStarts();
+    $("sAddons").onchange = refreshStudioPrice;
+    $("sAdd").onclick = () => addLine(studioLine());
+    renderSlots();
+    // Premier jour réservable proposé d'office (dans les 31 prochains jours).
+    renderCalendar().then(async () => {
+      for (let i = 0; i < 31 && !sel.date; i++) {
+        const dt = new Date(Date.parse(t + "T12:00:00Z") + i * 864e5);
+        try { await loadMonth(dt.getUTCFullYear(), dt.getUTCMonth()); } catch { break; }
+        const date = dt.toISOString().slice(0, 10);
+        if (["free", "part"].includes(dayStatus(date))) { sel.date = date; calMonth = { y: dt.getUTCFullYear(), m: dt.getUTCMonth() }; }
+      }
+      renderCalendar();
+      renderSlots();
+    });
   }
 
   // ---------- Autres services ----------
