@@ -26,7 +26,10 @@
         <label>Heure de début<select id="sStart"></select></label>
       </div>
       <p class="mute small" id="sHours"></p>
+      <h2 id="sOptTitle" style="margin-top:16px">Options</h2>
+      <p class="mute small" style="margin:-8px 0 0">Cochez ce que vous voulez : le prix se met à jour à chaque case.</p>
       <div id="sAddons" class="checks"></div>
+      <h2 style="margin-top:4px">Détail du prix</h2>
       <div class="pricebox" id="sPrice"></div>
       <button class="primary" id="sAdd">Ajouter au panier</button>
     </section>
@@ -146,8 +149,17 @@
     box.append(el("div", { className: "detail strong" }, el("span", { textContent: "Prix" }), el("span", { textContent: r.p.price === null ? "sur devis" : fmtDA(r.p.price) })));
     return true;
   }
+  // Options à cocher : une carte par option, avec son prix (fixe ou à l'heure) et sa description.
   function checks(container, addons) {
-    container.replaceChildren(...addons.map((a) => el("label", { className: "check" }, el("input", { type: "checkbox", value: a.id }), ` ${a.name} (+${fmtDA(a.price)})`)));
+    container.replaceChildren(...addons.map((a) => {
+      const box = el("input", { type: "checkbox", value: a.id });
+      const price = "+" + fmtDA(a.price) + (a.unit === "hour" ? " / heure" : "");
+      const text = el("span", { className: "opttext" }, el("span", { className: "optname", textContent: a.name }), el("span", { className: "optprice", textContent: price }));
+      if (a.description) text.append(el("span", { className: "optdesc", textContent: a.description }));
+      const card = el("label", { className: "optcard" }, box, text);
+      box.onchange = () => card.classList.toggle("on", box.checked);
+      return card;
+    }));
   }
   const checked = (container) => [...container.querySelectorAll("input:checked")].map((i) => i.value);
 
@@ -205,6 +217,7 @@
     dur.replaceChildren();
     for (let m = st.minMinutes; m <= 14 * 60; m += st.stepMinutes) dur.append(new Option(m % 60 ? `${Math.floor(m / 60)} h ${m % 60}` : `${m / 60} h`, String(m)));
     checks($("sAddons"), st.addons || []);
+    $("sOptTitle").hidden = !(st.addons || []).length;
     $("sDate").onchange = () => refreshStarts();
     dur.onchange = () => refreshStarts();
     $("sStart").onchange = refreshStudioPrice;

@@ -21,6 +21,13 @@ label { font-size: 13px; color: var(--mute); display: grid; gap: 4px; }
 label.check { display: flex; gap: 8px; align-items: center; color: var(--ink); font-size: 15px; }
 label.check input { width: auto; }
 .checks { display: grid; gap: 6px; margin: 12px 0; }
+.optcard { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 15px; cursor: pointer; }
+.optcard input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent); }
+.optcard.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.opttext { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+.optname { font-weight: 600; }
+.optprice { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.optdesc { grid-column: 1 / -1; color: var(--mute); font-size: 13px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 @media (max-width: 640px) { .grid3 { grid-template-columns: 1fr; } .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -54,10 +54,16 @@ export interface ProductPackage {
   price: number;
 }
 
+export type AddonUnit = "booking" | "hour";
+
 export interface Addon {
   id: string;
   name: string;
   price: number;
+  /** Location studio : « hour » = prix × durée réservée ; absent ou « booking » = une fois par réservation. */
+  unit?: AddonUnit;
+  /** Texte court affiché au client sous la case à cocher. */
+  description?: string;
 }
 
 export interface ProductConfig {
@@ -146,7 +152,7 @@ const THU = [4];
 const FRI_SAT = [5, 6];
 
 export const DEFAULT_CATALOG: Catalog = {
-  version: "2026-11-25-forfait-provisoire",
+  version: "2026-11-25-options-provisoire",
   currency: "DZD",
   depositPercent: 20,
   provisional: true,
@@ -169,7 +175,14 @@ export const DEFAULT_CATALOG: Catalog = {
     stepMinutes: 30,
     bufferMinutes: 0,
     specialDates: [],
-    addons: [{ id: "iphone15pm", name: "Utilisation iPhone 15 Pro Max", price: 800 }],
+    // Options à cocher par le client. Mannequin, voix off et montage : prix PROVISOIRES à fixer
+    // dans la page Équipe (« Options par réservation »).
+    addons: [
+      { id: "iphone15pm", name: "Utilisation iPhone 15 Pro Max", price: 800 },
+      { id: "mannequin", name: "Mannequin", price: 1000, unit: "hour", description: "Un mannequin pendant toute la séance." },
+      { id: "voixoff", name: "Voix off", price: 2000, description: "Enregistrement d'une voix off pour votre vidéo." },
+      { id: "montage", name: "Montage après la séance", price: 3500, description: "Une vidéo montée jusqu'à 1 min, 2 révisions incluses." },
+    ],
     minPrice: 0,
   },
   product: {
@@ -232,7 +245,7 @@ function bool(v: unknown, field: string): boolean {
 }
 const minutesOf = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
 
-function addons(v: unknown, field: string): Addon[] {
+function addons(v: unknown, field: string, allowHourly = false): Addon[] {
   if (!Array.isArray(v) || v.length > 30) invalid(`${field} invalide.`);
   const ids = new Set<string>();
   return v.map((a, i) => {
@@ -240,7 +253,13 @@ function addons(v: unknown, field: string): Addon[] {
     const id = text(a.id, `${field}[${i}].id`, 40);
     if (!ID_RE.test(id) || ids.has(id)) invalid(`${field}[${i}].id invalide ou en double.`);
     ids.add(id);
-    return { id, name: text(a.name, `${field}[${i}].name`), price: assertDzd(a.price, `${field}[${i}].price`) };
+    const out: Addon = { id, name: text(a.name, `${field}[${i}].name`), price: assertDzd(a.price, `${field}[${i}].price`) };
+    if (a.unit !== undefined && a.unit !== "booking") {
+      if (a.unit !== "hour" || !allowHourly) invalid(`${field}[${i}].unit invalide.`);
+      out.unit = "hour";
+    }
+    if (a.description !== undefined && a.description !== "") out.description = text(a.description, `${field}[${i}].description`, 160);
+    return out;
   });
 }
 
@@ -318,7 +337,7 @@ export function assertCatalog(c: unknown): Catalog {
     stepMinutes,
     bufferMinutes,
     specialDates,
-    addons: addons(s.addons ?? [], "studio.addons"),
+    addons: addons(s.addons ?? [], "studio.addons", true),
     minPrice: assertDzd(s.minPrice, "studio.minPrice"),
   };
 

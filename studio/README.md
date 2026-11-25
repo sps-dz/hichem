@@ -66,7 +66,7 @@ dans le dépôt, non déployé, pour un éventuel passage à Blaze plus tard.
 | Service | Tarif |
 | --- | --- |
 | Location studio | Forfait par tranche selon le jour (grille ci-dessous), réservation de 1 h minimum par pas de 30 min, tous les jours 8 h – 22 h |
-| Option studio | iPhone 15 Pro Max : +800 DA par réservation |
+| Options studio (cases à cocher) | iPhone 15 Pro Max +800 DA · Mannequin +1 000 DA **par heure** · Voix off +2 000 DA · Montage après la séance +3 500 DA — prix provisoires de mannequin, voix off et montage à fixer dans la page Équipe |
 | Shooting produit | Pack 5 produits 12 000 DA · 10 produits 22 000 DA · 20 produits 40 000 DA (3 photos par produit) ; photo en plus 1 000 DA |
 | Shooting vidéo | 8 000 DA par vidéo (9:16 ou 16:9) ; −10 % dès 3 vidéos, −15 % dès 5 |
 | Montage vidéo | Jusqu'à 1 min 3 500 DA · 3 min 6 000 DA · 10 min 12 000 DA ; sous-titres +1 500 DA ; 2 révisions incluses, puis 1 000 DA |
@@ -86,6 +86,12 @@ dimanche 9h → 11h = 1 500 DA ; 11h30 → 12h30 = 1 500 + 2 000 = 3 500 DA ;
 lundi 16h → 18h = 2 000 + 2 500 = 4 500 DA ; journée 8h → 22h = 6 000 DA.
 Les dates spéciales « tarif du jour » remplacent le forfait de chaque tranche ; les
 majorations ou remises en % s'appliquent à chaque forfait.
+
+**Options à cocher** : le client coche ou décoche chaque option (mannequin, voix off,
+montage, iPhone…) et le détail du prix se met à jour à chaque case. Dans la page Équipe,
+« Options par réservation » permet d'en ajouter autant que voulu : nom, prix, « par
+réservation » (ajouté une fois) ou « par heure » (multiplié par la durée), et une courte
+description affichée au client.
 
 **Modifier les tarifs sans toucher au code** : page Équipe → « Tarifs du studio ».
 On y change chaque case du tableau, les heures des tranches (ajout / retrait), les

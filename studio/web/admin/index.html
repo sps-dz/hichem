@@ -13,7 +13,8 @@
   .rates input { width: 92px; text-align: right; padding: 6px 8px; }
   .rates input.hm { width: 76px; text-align: center; }
   .rates th, .rates td { padding: 6px 4px; white-space: nowrap; }
-  .optrow { display: grid; grid-template-columns: 1fr 120px auto; gap: 8px; margin-bottom: 8px; }
+  .optrow { display: grid; grid-template-columns: 1.2fr 110px 150px 2fr auto; gap: 8px; margin-bottom: 8px; }
+  @media (max-width: 640px) { .optrow { grid-template-columns: 1fr 1fr; padding-bottom: 8px; border-bottom: 1px solid var(--line); } }
   .order { border-top: 1px solid var(--line); padding: 12px 0; }
   .order:first-child { border-top: 0; }
   .order .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
@@ -132,7 +133,7 @@
     </div>
 
     <h2 style="margin-top:20px">Options par réservation</h2>
-    <p class="mute">Ajoutées une seule fois au prix de la réservation, quelle que soit sa durée.</p>
+    <p class="mute">Cases à cocher proposées au client (mannequin, voix off, montage, iPhone…). Prix « par réservation » : ajouté une fois. Prix « par heure » : multiplié par la durée réservée. Ajoutez autant d'options que vous voulez, puis « Publier les nouveaux tarifs ».</p>
     <div id="optRows"></div>
     <button id="addOpt">+ Ajouter une option</button>
 
@@ -531,9 +532,14 @@
     $("optRows").replaceChildren(...grid.addons.map((a, i) => {
       const n = input(a.name, "", (v) => (grid.addons[i].name = v)); n.placeholder = "Nom de l'option"; n.setAttribute("aria-label", "Nom de l'option");
       const p = input(a.price, "", (v) => (grid.addons[i].price = Number(v)), "number"); p.min = "0"; p.step = "100"; p.setAttribute("aria-label", "Prix de l'option en DA");
+      const unit = el("select");
+      unit.setAttribute("aria-label", "Le prix s'applique");
+      unit.append(new Option("DA par réservation", "booking", false, a.unit !== "hour"), new Option("DA par heure", "hour", false, a.unit === "hour"));
+      unit.onchange = () => (grid.addons[i].unit = unit.value);
+      const d = input(a.description || "", "", (v) => (grid.addons[i].description = v)); d.placeholder = "Description pour le client (facultatif)"; d.maxLength = 160; d.setAttribute("aria-label", "Description de l'option");
       const del = el("button", { textContent: "Retirer" });
       del.onclick = () => { grid.addons.splice(i, 1); renderGrid(); };
-      return el("div", { className: "optrow" }, n, p, del);
+      return el("div", { className: "optrow" }, n, p, unit, d, del);
     }));
     $("minMinutes").value = grid.minMinutes; $("stepMinutes").value = grid.stepMinutes;
     $("bufferMinutes").value = grid.bufferMinutes; $("minPrice").value = grid.minPrice;
@@ -550,7 +556,7 @@
     if (grid.bands.length <= 1) return show("Il faut garder au moins une tranche.", true);
     grid.bands.pop(); grid.rates.forEach((row) => row.pop()); renderGrid();
   };
-  $("addOpt").onclick = () => { grid.addons.push({ name: "", price: 0 }); renderGrid(); };
+  $("addOpt").onclick = () => { grid.addons.push({ name: "", price: 0, unit: "booking", description: "" }); renderGrid(); };
   $("resetRates").onclick = () => { grid = gridFromStudio(currentCatalog.studio); renderGrid(); show("Modifications annulées."); };
   $("publishRates").onclick = (e) => busy(e.target, async () => {
     const payload = { ...grid, minMinutes: Number($("minMinutes").value), stepMinutes: Number($("stepMinutes").value), bufferMinutes: Number($("bufferMinutes").value), minPrice: Number($("minPrice").value) };

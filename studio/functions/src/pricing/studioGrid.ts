@@ -16,7 +16,7 @@ export interface StudioGrid {
   bands: { from: string; to: string }[];
   /** rates[jour 0=dimanche … 6=samedi][tranche] = forfait de la tranche, ou null (fermé). */
   rates: (number | null)[][];
-  addons: { id?: string; name: string; price: number }[];
+  addons: { id?: string; name: string; price: number; unit?: "booking" | "hour"; description?: string }[];
   minMinutes: number;
   stepMinutes: number;
   bufferMinutes: number;
@@ -98,7 +98,14 @@ export function studioFromGrid(gridIn: unknown, base: StudioConfig): StudioConfi
     let id = typeof a.id === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.id) ? a.id : slug(name);
     for (let n = 2; ids.has(id); n++) id = `${slug(name)}-${n}`;
     ids.add(id);
-    return { id, name, price: assertDzd(a.price, `Option « ${name} »`) };
+    const out: Addon = { id, name, price: assertDzd(a.price, `Option « ${name} »`) };
+    if (a.unit === "hour") out.unit = "hour";
+    else if (a.unit !== undefined && a.unit !== "booking") invalid(`Option « ${name} » : unité invalide.`);
+    if (typeof a.description === "string" && a.description.trim()) {
+      if (a.description.length > 160) invalid(`Option « ${name} » : description trop longue (160 caractères au plus).`);
+      out.description = a.description.trim();
+    }
+    return out;
   });
 
   const int = (v: unknown, field: string) => {
@@ -128,7 +135,7 @@ export function gridFromStudio(s: StudioConfig): StudioGrid {
   return {
     bands,
     rates,
-    addons: (s.addons ?? []).map((a) => ({ id: a.id, name: a.name, price: a.price })),
+    addons: (s.addons ?? []).map((a) => ({ id: a.id, name: a.name, price: a.price, ...(a.unit ? { unit: a.unit } : {}), ...(a.description ? { description: a.description } : {}) })),
     minMinutes: s.minMinutes,
     stepMinutes: s.stepMinutes,
     bufferMinutes: s.bufferMinutes,

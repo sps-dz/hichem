@@ -108,7 +108,7 @@ var SUN_WED = [0, 1, 2, 3];
 var THU = [4];
 var FRI_SAT = [5, 6];
 var DEFAULT_CATALOG = {
-  version: "2026-11-25-forfait-provisoire",
+  version: "2026-11-25-options-provisoire",
   currency: "DZD",
   depositPercent: 20,
   provisional: true,
@@ -131,7 +131,14 @@ var DEFAULT_CATALOG = {
     stepMinutes: 30,
     bufferMinutes: 0,
     specialDates: [],
-    addons: [{ id: "iphone15pm", name: "Utilisation iPhone 15 Pro Max", price: 800 }],
+    // Options à cocher par le client. Mannequin, voix off et montage : prix PROVISOIRES à fixer
+    // dans la page Équipe (« Options par réservation »).
+    addons: [
+      { id: "iphone15pm", name: "Utilisation iPhone 15 Pro Max", price: 800 },
+      { id: "mannequin", name: "Mannequin", price: 1e3, unit: "hour", description: "Un mannequin pendant toute la s\xE9ance." },
+      { id: "voixoff", name: "Voix off", price: 2e3, description: "Enregistrement d'une voix off pour votre vid\xE9o." },
+      { id: "montage", name: "Montage apr\xE8s la s\xE9ance", price: 3500, description: "Une vid\xE9o mont\xE9e jusqu'\xE0 1 min, 2 r\xE9visions incluses." }
+    ],
     minPrice: 0
   },
   product: {
@@ -189,7 +196,7 @@ function bool(v, field) {
   return v;
 }
 var minutesOf = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
-function addons(v, field) {
+function addons(v, field, allowHourly = false) {
   if (!Array.isArray(v) || v.length > 30) invalid(`${field} invalide.`);
   const ids = /* @__PURE__ */ new Set();
   return v.map((a, i) => {
@@ -197,7 +204,13 @@ function addons(v, field) {
     const id = text(a.id, `${field}[${i}].id`, 40);
     if (!ID_RE.test(id) || ids.has(id)) invalid(`${field}[${i}].id invalide ou en double.`);
     ids.add(id);
-    return { id, name: text(a.name, `${field}[${i}].name`), price: assertDzd(a.price, `${field}[${i}].price`) };
+    const out = { id, name: text(a.name, `${field}[${i}].name`), price: assertDzd(a.price, `${field}[${i}].price`) };
+    if (a.unit !== void 0 && a.unit !== "booking") {
+      if (a.unit !== "hour" || !allowHourly) invalid(`${field}[${i}].unit invalide.`);
+      out.unit = "hour";
+    }
+    if (a.description !== void 0 && a.description !== "") out.description = text(a.description, `${field}[${i}].description`, 160);
+    return out;
   });
 }
 function assertCatalog(c) {
@@ -266,7 +279,7 @@ function assertCatalog(c) {
     stepMinutes,
     bufferMinutes,
     specialDates,
-    addons: addons(s.addons ?? [], "studio.addons"),
+    addons: addons(s.addons ?? [], "studio.addons", true),
     minPrice: assertDzd(s.minPrice, "studio.minPrice")
   };
   const p = c.product;
@@ -374,7 +387,7 @@ var hmOf = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 6
 var isObj2 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 var fmt = (n) => `${n.toLocaleString("fr-FR").replace(/ /g, " ")} DA`;
 var MAX_LINES = 20;
-function addonsTotal(ids, available, details) {
+function addonsTotal(ids, available, details, durationMinutes = 0) {
   if (ids === void 0) return 0;
   if (!Array.isArray(ids) || ids.length > available.length) invalid("Options invalides.");
   const seen = /* @__PURE__ */ new Set();
@@ -383,8 +396,15 @@ function addonsTotal(ids, available, details) {
     const a = available.find((x) => x.id === id);
     if (!a || seen.has(String(id))) invalid("Option inconnue ou en double.", { option: id });
     seen.add(String(id));
-    details.push({ label: a.name, amount: a.price });
-    sum += a.price;
+    if (a.unit === "hour") {
+      const amount = divRound(a.price * durationMinutes, 60);
+      const h = durationMinutes % 60 ? `${Math.floor(durationMinutes / 60)} h ${durationMinutes % 60}` : `${durationMinutes / 60} h`;
+      details.push({ label: `${a.name} \xB7 ${h} \xD7 ${fmt(a.price)}/h`, amount });
+      sum += amount;
+    } else {
+      details.push({ label: a.name, amount: a.price });
+      sum += a.price;
+    }
   }
   return sum;
 }
@@ -435,7 +455,7 @@ function priceStudio(cat, raw, now, id) {
     price += amount;
   }
   if (covered !== duration) invalid("Une partie de ce cr\xE9neau n'a pas de tarif : contactez le studio.", { date, start });
-  price += addonsTotal(raw.addons, cfg.addons ?? [], details);
+  price += addonsTotal(raw.addons, cfg.addons ?? [], details, duration);
   const min = applyMin(price, cfg.minPrice, details);
   return {
     id,
@@ -709,7 +729,14 @@ function studioFromGrid(gridIn, base) {
     let id = typeof a.id === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.id) ? a.id : slug(name);
     for (let n = 2; ids.has(id); n++) id = `${slug(name)}-${n}`;
     ids.add(id);
-    return { id, name, price: assertDzd(a.price, `Option \xAB ${name} \xBB`) };
+    const out = { id, name, price: assertDzd(a.price, `Option \xAB ${name} \xBB`) };
+    if (a.unit === "hour") out.unit = "hour";
+    else if (a.unit !== void 0 && a.unit !== "booking") invalid(`Option \xAB ${name} \xBB : unit\xE9 invalide.`);
+    if (typeof a.description === "string" && a.description.trim()) {
+      if (a.description.length > 160) invalid(`Option \xAB ${name} \xBB : description trop longue (160 caract\xE8res au plus).`);
+      out.description = a.description.trim();
+    }
+    return out;
   });
   const int = (v, field) => {
     if (typeof v !== "number" || !Number.isSafeInteger(v)) invalid(`${field} invalide.`);
@@ -737,7 +764,7 @@ function gridFromStudio(s) {
   return {
     bands,
     rates,
-    addons: (s.addons ?? []).map((a) => ({ id: a.id, name: a.name, price: a.price })),
+    addons: (s.addons ?? []).map((a) => ({ id: a.id, name: a.name, price: a.price, ...a.unit ? { unit: a.unit } : {}, ...a.description ? { description: a.description } : {} })),
     minMinutes: s.minMinutes,
     stepMinutes: s.stepMinutes,
     bufferMinutes: s.bufferMinutes,

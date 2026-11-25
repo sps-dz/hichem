@@ -10,7 +10,7 @@
 import { invalid } from "../lib/errors";
 import { assertDzd, percentOfDzd } from "../lib/money";
 import { algiersToUtcMs, assertHm, assertYmd, slotKeysFor, utcMsToAlgiers } from "../lib/time";
-import { Catalog, ServiceId, StudioPeriod } from "./catalog";
+import { Addon, Catalog, ServiceId, StudioPeriod } from "./catalog";
 
 /** a / b arrondi au plus proche, 0,5 vers le haut (entiers positifs). */
 export function divRound(a: number, b: number): number {
@@ -78,7 +78,7 @@ const MAX_LINES = 20;
 
 // ---------------------------------------------------------------- lignes
 
-function addonsTotal(ids: unknown, available: { id: string; name: string; price: number }[], details: PriceDetail[]): number {
+function addonsTotal(ids: unknown, available: Addon[], details: PriceDetail[], durationMinutes = 0): number {
   if (ids === undefined) return 0;
   if (!Array.isArray(ids) || ids.length > available.length) invalid("Options invalides.");
   const seen = new Set<string>();
@@ -87,8 +87,16 @@ function addonsTotal(ids: unknown, available: { id: string; name: string; price:
     const a = available.find((x) => x.id === id);
     if (!a || seen.has(String(id))) invalid("Option inconnue ou en double.", { option: id });
     seen.add(String(id));
-    details.push({ label: a.name, amount: a.price });
-    sum += a.price;
+    if (a.unit === "hour") {
+      // Option à l'heure (location studio) : prix × durée, arrondi au dinar.
+      const amount = divRound(a.price * durationMinutes, 60);
+      const h = durationMinutes % 60 ? `${Math.floor(durationMinutes / 60)} h ${durationMinutes % 60}` : `${durationMinutes / 60} h`;
+      details.push({ label: `${a.name} · ${h} × ${fmt(a.price)}/h`, amount });
+      sum += amount;
+    } else {
+      details.push({ label: a.name, amount: a.price });
+      sum += a.price;
+    }
   }
   return sum;
 }
@@ -146,7 +154,7 @@ function priceStudio(cat: Catalog, raw: Record<string, unknown>, now: number, id
     price += amount;
   }
   if (covered !== duration) invalid("Une partie de ce créneau n'a pas de tarif : contactez le studio.", { date, start });
-  price += addonsTotal(raw.addons, cfg.addons ?? [], details);
+  price += addonsTotal(raw.addons, cfg.addons ?? [], details, duration);
 
   const min = applyMin(price, cfg.minPrice, details);
   return {

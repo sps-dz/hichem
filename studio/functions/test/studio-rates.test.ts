@@ -119,7 +119,7 @@ test("grille d'administration : jour fermé, nouvelle tranche, options, et refus
   const s = studioFromGrid(g, base);
   assert.equal(s.openingHours["5"], null);
   assert.deepEqual(s.openingHours["0"], { open: "12:00", close: "22:00" });
-  assert.deepEqual(s.addons.map((a) => a.id), ["iphone15pm", "fond-colore"]);
+  assert.deepEqual(s.addons.map((a) => a.id), ["iphone15pm", "mannequin", "voixoff", "montage", "fond-colore"]);
   const c = { ...cat(), studio: s };
   assertCatalog(c);
   assert.throws(() => p(c, studioLine(DAY.ven, "10:00", 60)), /fermé/);
@@ -169,4 +169,32 @@ test("publication depuis la page d'administration : nouvelle grille en vigueur, 
   const audit = (await db.collection("auditLogs").where("action", "==", "catalog.publish").get()).docs.map((d) => d.get("after").version);
   assert.ok(audit.includes(version));
   assert.equal((await db.collection("catalogVersions").get()).size, 2);
+});
+
+test("options à cocher : mannequin à l'heure, voix off et montage au forfait, prix détaillé ligne par ligne", () => {
+  const c = cat();
+  // Lundi 16h–18h (2 000 + 2 500) + mannequin 2 h × 1 000 + voix off 2 000 + montage 3 500 + iPhone 800.
+  const l = p(c, studioLine(DAY.lun, "16:00", 120, ["mannequin", "voixoff", "montage", "iphone15pm"]));
+  assert.equal(l.price, 4500 + 2000 + 2000 + 3500 + 800);
+  assert.deepEqual(l.details.map((d) => d.amount), [2000, 2500, 2000, 2000, 3500, 800]);
+  assert.equal(l.details[2].label, "Mannequin · 2 h × 1 000 DA/h");
+  // Sans option : seulement le forfait ; décocher retire la ligne.
+  assert.equal(p(c, studioLine(DAY.lun, "16:00", 120)).price, 4500);
+  assert.equal(p(c, studioLine(DAY.lun, "16:00", 120, ["voixoff"])).price, 6500);
+  // Mannequin 1 h 30 : 1 500 DA (arrondi au dinar).
+  assert.equal(p(c, studioLine(DAY.lun, "16:00", 90, ["mannequin"])).details.at(-1)?.amount, 1500);
+});
+
+test("options : une option à l'heure n'existe que pour le studio ; description limitée", () => {
+  const c = cat();
+  c.product.addons = [{ id: "x", name: "X", price: 100, unit: "hour" }];
+  assert.throws(() => assertCatalog(c), /unit invalide/);
+  const g: StudioGrid = JSON.parse(JSON.stringify(gridFromStudio(DEFAULT_CATALOG.studio)));
+  assert.equal(g.addons.find((a) => a.id === "mannequin")?.unit, "hour");
+  g.addons.push({ name: "Maquilleuse", price: 1500, unit: "hour", description: "Maquillage avant la séance." });
+  const s = studioFromGrid(g, DEFAULT_CATALOG.studio);
+  assert.deepEqual(s.addons.at(-1), { id: "maquilleuse", name: "Maquilleuse", price: 1500, unit: "hour", description: "Maquillage avant la séance." });
+  assert.deepEqual(gridFromStudio(s).addons.at(-1), { id: "maquilleuse", name: "Maquilleuse", price: 1500, unit: "hour", description: "Maquillage avant la séance." });
+  g.addons.push({ name: "Y", price: 1, unit: "jour" as "hour" });
+  assert.throws(() => studioFromGrid(g, DEFAULT_CATALOG.studio), /unité invalide/);
 });
