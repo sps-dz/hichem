@@ -5,11 +5,11 @@
 // (par exemple hero: "img/hero.jpg"). Tant qu'une photo manque, une image
 // d'attente dessinée est affichée à sa place.
 export const PHOTOS = {
-  hero: null,     // grand visuel du haut (portrait ou plateau éclairé)
-  product: null,  // shooting produit
-  editing: null,  // montage
-  video: null,    // vidéo / reels
-  ad: null,       // pub
+  hero: "img/hero.jpg",       // grand visuel du haut : le plateau éclairé
+  product: "img/product.jpg", // shooting produit : la table de prise de vue
+  editing: null,              // montage (image dessinée en attendant une capture de montage)
+  video: "img/video.jpg",     // vidéo / reels : mannequin et boîte à lumière
+  ad: "img/ad.jpg",           // pub : le décor fauteuil et tapis
 };
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;

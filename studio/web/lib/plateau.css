@@ -33,7 +33,7 @@ body.client.plateau {
 .v-hero { position: relative; overflow: hidden; min-height: clamp(520px, 78vh, 760px); display: grid; align-items: end; padding: 96px clamp(16px, 4vw, 40px) clamp(28px, 5vw, 56px); }
 .v-hero .photo { position: absolute; inset: 0; }
 .v-hero .photo img, .v-card .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.v-hero .photo img { filter: saturate(.9) contrast(1.05); }
+.v-hero .photo img { filter: saturate(.9) contrast(1.05); object-position: center 42%; }
 /* Le faisceau : la photo n'est éclairée que là où passe le projecteur. */
 .v-hero .dark { position: absolute; inset: 0; background: radial-gradient(circle min(300px, 60vw) at var(--x, 62%) var(--y, 38%), rgba(17,14,12,0) 0%, rgba(17,14,12,.55) 45%, rgba(17,14,12,.94) 75%); }
 .v-hero .grain { position: absolute; inset: -50%; opacity: .07; background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 3px 3px; animation: v-grain 1s steps(4) infinite; pointer-events: none; }
