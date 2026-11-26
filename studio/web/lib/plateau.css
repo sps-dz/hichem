@@ -1,0 +1,113 @@
+/* Habillage « Plateau » du site client : nuit de studio, lumière tungstène.
+   Chargé seulement par les pages client (index, suivi) ; la page Équipe n'est pas touchée. */
+body.client.plateau {
+  --bg: #110e0c; --card: #1a1512; --ink: #f2ebe1; --mute: #b9ae9f; --line: #3a3029;
+  --accent: #ffae4d; --bad: #e2857c; --wa: #25a35a; --note: #2b2117;
+  --tung: #ffae4d; --tung2: #ff7a29; --onlight: #1a0f05;
+  --display: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  background: var(--bg); color: var(--ink); color-scheme: dark;
+  font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+[dir="rtl"] body.client.plateau { --display: "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", "Geeza Pro", system-ui, sans-serif; }
+
+/* Le texte posé sur la lumière orange reste foncé, pour être lisible. */
+.plateau button.primary, .plateau a.button.primary,
+.plateau .tabs button[aria-selected="true"], .plateau .calday.on, .plateau .slot.on,
+.plateau .langs button[aria-pressed="true"], .plateau .services .service[aria-selected="true"],
+.plateau .services .service[aria-selected="true"] span, .plateau .calday.full, .plateau .slot.busy { color: var(--onlight); }
+.plateau button.primary, .plateau a.button.primary { font-weight: 700; }
+.plateau section { border-color: var(--line); }
+.plateau main { padding-top: 8px; }
+/* Les blocs de la page d'accueil ne prennent pas le style « carte » des sections du formulaire. */
+.plateau section.v-hero, .plateau section.v-sect { background: none; border: 0; border-radius: 0; margin-top: 0; }
+.plateau section.v-hero { background: #0b0907; }
+
+/* ---------- Barre du haut ---------- */
+.v-nav { position: absolute; inset: 0 0 auto; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px clamp(16px, 4vw, 40px); }
+.v-logo { font: 900 24px/1 var(--display); letter-spacing: .04em; text-transform: uppercase; margin: 0; }
+.v-logo i { color: var(--tung); font-style: normal; }
+.v-nav .langs button { background: rgba(17,14,12,.6); border-color: #4a3e34; color: var(--ink); }
+.v-nav .langs button[aria-pressed="true"] { background: var(--tung); border-color: var(--tung); color: var(--onlight); }
+
+/* ---------- Grand visuel ---------- */
+.v-hero { position: relative; overflow: hidden; min-height: clamp(520px, 78vh, 760px); display: grid; align-items: end; padding: 96px clamp(16px, 4vw, 40px) clamp(28px, 5vw, 56px); }
+.v-hero .photo { position: absolute; inset: 0; }
+.v-hero .photo img, .v-card .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.v-hero .photo img { filter: saturate(.9) contrast(1.05); }
+/* Le faisceau : la photo n'est éclairée que là où passe le projecteur. */
+.v-hero .dark { position: absolute; inset: 0; background: radial-gradient(circle min(300px, 60vw) at var(--x, 62%) var(--y, 38%), rgba(17,14,12,0) 0%, rgba(17,14,12,.55) 45%, rgba(17,14,12,.94) 75%); }
+.v-hero .grain { position: absolute; inset: -50%; opacity: .07; background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 3px 3px; animation: v-grain 1s steps(4) infinite; pointer-events: none; }
+@keyframes v-grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-1%, 2%); } 50% { transform: translate(2%, -1%); } 75% { transform: translate(-2%, -2%); } }
+.v-hero .txt { position: relative; z-index: 2; display: grid; gap: 16px; max-width: 780px; }
+.v-meter { display: flex; flex-wrap: wrap; gap: 6px 18px; color: #a89d8f; font: 600 12px/1.2 ui-monospace, "Cascadia Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.v-meter b { color: var(--ink); }
+.plateau .v-title { margin: 0; font: 900 clamp(54px, 11vw, 136px)/.88 var(--display); text-transform: uppercase; letter-spacing: .005em; }
+[dir="rtl"] .plateau .v-title { font-weight: 800; font-size: clamp(44px, 8.5vw, 104px); line-height: 1.15; }
+.v-title .w { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: .04em; }
+.v-title .w > span { display: inline-block; animation: v-rise .9s cubic-bezier(.2,.8,.2,1) both; }
+.v-title .hot { color: var(--tung); text-shadow: 0 0 40px rgba(255,174,77,.45); }
+@keyframes v-rise { from { transform: translateY(105%); } to { transform: none; } }
+.v-lead { font-size: clamp(16px, 2vw, 18px); max-width: 48ch; color: #ddd3c6; margin: 0; }
+.v-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.v-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 12px 20px; border-radius: 999px; background: var(--tung); color: var(--onlight); font: 700 15px/1.2 inherit; font-family: inherit; text-decoration: none; border: 0; cursor: pointer; }
+.v-btn.ghost { background: rgba(17,14,12,.5); color: var(--ink); border: 1px solid #5a4b3e; }
+.v-btn:hover { filter: brightness(1.08); }
+
+/* ---------- Bandeau défilant ---------- */
+.v-marquee { border-block: 1px solid #2a241f; overflow: hidden; white-space: nowrap; padding: 14px 0; direction: ltr; }
+.v-marquee div { display: inline-flex; gap: 40px; animation: v-slide 30s linear infinite; font: 800 26px/1 var(--display); text-transform: uppercase; color: #6b6156; }
+.v-marquee span:nth-child(odd) { color: var(--ink); }
+@keyframes v-slide { to { transform: translateX(-50%); } }
+
+/* ---------- Services (ordre : produit, montage, vidéo, pub) ---------- */
+.v-sect { max-width: 1180px; margin: 0 auto; padding: clamp(32px, 5vw, 60px) clamp(16px, 4vw, 40px) 8px; display: grid; gap: 18px; }
+.plateau .v-sect h2 { margin: 0; font: 800 clamp(30px, 4.4vw, 46px)/1 var(--display); text-transform: uppercase; }
+.v-sect > p { margin: -6px 0 0; color: var(--mute); max-width: 60ch; }
+.v-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.v-grid .v-card:first-child { grid-column: span 2; grid-row: span 2; }
+@media (max-width: 860px) { .v-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .v-grid .v-card:first-child { grid-column: 1 / -1; grid-row: auto; } }
+@media (max-width: 520px) { .v-grid { grid-template-columns: 1fr; } }
+.v-card { position: relative; overflow: hidden; display: grid; grid-template-rows: auto 1fr; border: 1px solid #2c2520; border-radius: 14px; background: #15110e; color: var(--ink); text-align: start; padding: 0; font: inherit; cursor: pointer; }
+.v-card::before { content: ""; position: absolute; inset: 0; z-index: 1; background: radial-gradient(circle 220px at var(--ox, 50%) var(--oy, -40%), rgba(255,174,77,.22), transparent 70%); pointer-events: none; }
+.v-card .pic { aspect-ratio: 16 / 10; overflow: hidden; background: #1d1814; }
+/* Carte n° 1 (shooting produit) : la photo remplit la carte, le texte est posé dessus. */
+.v-card:first-child { grid-template-rows: 1fr; min-height: clamp(360px, 46vw, 560px); }
+.v-card:first-child .pic { position: absolute; inset: 0; aspect-ratio: auto; }
+.v-card:first-child .body { align-self: end; padding: 60px 22px 22px; background: linear-gradient(transparent, rgba(12,9,7,.92) 55%); }
+.v-card .pic img { transition: transform .8s cubic-bezier(.2,.8,.2,1), filter .8s; filter: grayscale(.5) brightness(.8); }
+.v-card:hover .pic img, .v-card:focus-visible .pic img { transform: scale(1.06); filter: none; }
+.v-card .body { position: relative; z-index: 2; display: grid; gap: 6px; padding: 16px 18px 18px; align-content: start; }
+.v-card .num { font: 600 12px/1 ui-monospace, monospace; color: var(--tung); letter-spacing: .12em; }
+.v-card b { font: 800 clamp(24px, 3vw, 32px)/1 var(--display); text-transform: uppercase; }
+.v-card:first-child b { font-size: clamp(32px, 4.4vw, 52px); }
+.v-card .d { color: var(--mute); font-size: 15px; }
+.v-card .go { margin-top: 6px; color: var(--tung); font-weight: 700; font-size: 14px; }
+.v-card:focus-visible { outline: 3px solid var(--tung); outline-offset: 2px; }
+
+/* ---------- Réserver ---------- */
+#reserver { scroll-margin-top: 12px; }
+.plateau .v-booktitle { margin: 28px 0 0; font: 800 clamp(30px, 4.4vw, 46px)/1 var(--display); text-transform: uppercase; }
+.plateau .services .service[data-id="studio"] { grid-column: 1 / -1; }
+
+/* ---------- Bouton flottant « Louer le studio » (en bas à droite) ---------- */
+.v-fab { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); z-index: 50; display: inline-flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px 20px 10px 12px; border-radius: 999px; border: 1px solid #ffcf8f; background: linear-gradient(135deg, #ffc46e, var(--tung) 45%, var(--tung2)); color: var(--onlight); font: 800 15px/1.15 inherit; font-family: inherit; cursor: pointer; text-decoration: none; overflow: hidden; isolation: isolate; box-shadow: 0 0 0 0 rgba(255,174,77,.55), 0 14px 34px -10px rgba(255,122,41,.7); animation: v-glow 2.6s ease-in-out infinite; transition: transform .2s, opacity .3s; }
+[dir="rtl"] .v-fab { padding: 10px 12px 10px 20px; }
+.v-fab:hover { transform: translateY(-2px) scale(1.03); }
+.v-fab:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+/* Reflet de projecteur qui balaie le bouton. */
+.v-fab::after { content: ""; position: absolute; inset: -40% auto -40% -60%; width: 45%; z-index: -1; background: linear-gradient(100deg, transparent, rgba(255,255,255,.75), transparent); transform: skewX(-18deg); animation: v-sweep 3.2s ease-in-out infinite; }
+.v-fab .bulb { position: relative; width: 34px; height: 34px; flex: none; border-radius: 50%; background: radial-gradient(circle at 50% 45%, #fffbe9 0 22%, #ffe1a6 40%, #ffae4d 70%); box-shadow: 0 0 12px 3px rgba(255,240,200,.9); animation: v-flicker 2.6s ease-in-out infinite; }
+.v-fab .bulb::before { content: ""; position: absolute; inset: -9px; border-radius: 50%; border: 2px solid rgba(26,15,5,.35); border-top-color: transparent; border-bottom-color: transparent; animation: v-spin 6s linear infinite; }
+.v-fab small { display: block; font-weight: 600; font-size: 12px; opacity: .8; }
+.v-fab.away { opacity: 0; pointer-events: none; transform: translateY(12px); }
+@keyframes v-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,174,77,.5), 0 14px 34px -10px rgba(255,122,41,.7); } 50% { box-shadow: 0 0 0 12px rgba(255,174,77,0), 0 14px 44px -6px rgba(255,150,60,.95); } }
+@keyframes v-sweep { 0%, 55% { left: -60%; } 100% { left: 130%; } }
+@keyframes v-flicker { 0%, 100% { filter: brightness(1); } 47% { filter: brightness(1); } 50% { filter: brightness(.7); } 53% { filter: brightness(1.15); } }
+@keyframes v-spin { to { transform: rotate(360deg); } }
+@media (max-width: 420px) { .v-fab small { display: none; } .v-fab { min-height: 52px; font-size: 14px; } }
+body.plateau main { padding-bottom: 110px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v-hero .grain, .v-marquee div, .v-title .w > span, .v-fab, .v-fab::after, .v-fab .bulb, .v-fab .bulb::before { animation: none !important; }
+  .v-card .pic img { transition: none; }
+}

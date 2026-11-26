@@ -163,3 +163,10 @@ Les tests tournent aussi sur GitHub à chaque envoi qui touche `studio/`
 - Délai pour verser l'acompte (24 h par défaut), annulation et remboursement.
 - Coordonnées BaridiMob / CCP, numéro WhatsApp du studio, nom et logo.
 - Tranches de 30 minutes.
+
+## Photos de la page d'accueil
+
+La page client (habillage « Plateau ») affiche des images d'attente tant que les vraies photos
+ne sont pas fournies. Pour en mettre une : déposer le fichier dans `studio/web/img/`
+(par exemple `hero.jpg`), puis indiquer son chemin dans `PHOTOS` en haut de
+`studio/web/lib/vitrine.js` (`hero`, `product`, `editing`, `video`, `ad`).

@@ -4,14 +4,37 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Studio — Réserver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Manrope:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="lib/studio.css">
+<link rel="stylesheet" href="lib/plateau.css">
 </head>
-<body class="client">
-<main>
-  <header class="top">
-    <h1 id="studioName">Studio</h1>
-    <div class="langs" id="langs" role="group" aria-label="Langue / اللغة / Language"></div>
-  </header>
+<body class="client plateau">
+<header class="v-nav">
+  <p class="v-logo" id="studioName">Studio</p>
+  <div class="langs" id="langs" role="group" aria-label="Langue / اللغة / Language"></div>
+</header>
+<section class="v-hero" id="vHero" aria-labelledby="vTitle">
+  <div class="photo"><img data-photo="hero" alt=""></div>
+  <div class="dark" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="txt">
+    <div class="v-meter" dir="ltr" aria-hidden="true"><span><b>3200 K</b></span><span><b>f/2.8</b></span><span><b>1/160 s</b></span><span><b>ISO 200</b></span></div>
+    <h1 class="v-title" id="vTitle"></h1>
+    <p class="v-lead" data-i18n="vLead"></p>
+    <div class="v-row"><button type="button" class="v-btn" data-go="product" data-i18n="vCta"></button><a class="v-btn ghost" href="#vServices" data-i18n="vCta2"></a></div>
+  </div>
+</section>
+<div class="v-marquee" aria-hidden="true"><div id="vMarquee"></div></div>
+<section class="v-sect" id="vServices" aria-labelledby="vSvcTitle">
+  <h2 id="vSvcTitle" data-i18n="vSvcTitle"></h2>
+  <p data-i18n="vSvcLead"></p>
+  <div class="v-grid" id="vGrid"></div>
+</section>
+<button type="button" class="v-fab" id="vFab" data-go="studio"><span class="bulb" aria-hidden="true"></span><span><span data-i18n="vFab"></span><small data-i18n="vFabSub"></small></span></button>
+<main id="reserver">
+  <h2 class="v-booktitle" data-i18n="vBookTitle"></h2>
   <p class="lead" data-i18n="intro">Louez le studio à l'heure ou confiez-nous vos photos et vidéos. Le prix s'affiche tout de suite, sans engagement.</p>
   <div class="how">
     <b data-i18n="howTitle"></b>
@@ -164,6 +187,52 @@
   applyPage(document.getElementById("langs"));
   document.title = "Studio — " + t("pageTitle");
 
+  // ---------- Page d'accueil « Plateau » ----------
+  const V = await import("./lib/vitrine.js");
+  V.fillPhotos();
+  V.riseTitle(document.getElementById("vTitle"), t("vTitle1"), t("vTitle2"));
+  V.beam(document.getElementById("vHero"));
+  function setLogo(name) {
+    const parts = String(name).trim().split(/\s+/);
+    const last = parts.length > 1 ? parts.pop() : "";
+    const logo = document.getElementById("studioName");
+    logo.replaceChildren(parts.join(" ") + (last ? " " : ""));
+    if (last) logo.append(Object.assign(document.createElement("i"), { textContent: last }));
+  }
+  setLogo("Studio");
+  function goTo(id) {
+    if ([...document.getElementById("tabs").children].some((b) => b.dataset.id === id)) selectTab(id);
+    // Le studio : on va droit au calendrier ; les autres services : en haut de « Réserver ».
+    const target = id === "studio" && !document.getElementById("shop").hidden ? document.querySelector('section[data-tab="studio"]') : document.getElementById("reserver");
+    target.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
+  document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => goTo(b.dataset.go)));
+  // Le bouton flottant s'efface quand la réservation du studio est déjà à l'écran.
+  new IntersectionObserver(([e]) => document.getElementById("vFab").classList.toggle("away", e.isIntersecting), { threshold: .05 })
+    .observe(document.querySelector('section[data-tab="studio"]'));
+  function buildVitrine(enabled) {
+    const svc = enabled.filter((id) => id !== "studio");
+    const names = enabled.map((id) => t("tab_" + id));
+    document.getElementById("vMarquee").replaceChildren(...[...names, ...names].map((n) => Object.assign(document.createElement("span"), { textContent: n })));
+    document.getElementById("vGrid").replaceChildren(...svc.map((id, i) => {
+      const b = el("button", { type: "button", className: "v-card" },
+        el("div", { className: "pic" }, Object.assign(document.createElement("img"), { alt: "" })),
+        el("div", { className: "body" },
+          el("span", { className: "num", textContent: String(i + 1).padStart(2, "0") }),
+          el("b", { textContent: t("tab_" + id) }),
+          el("span", { className: "d", textContent: t("tabd_" + id) }),
+          el("span", { className: "go", textContent: t("vCardGo") + (document.dir === "rtl" ? " ←" : " →") })));
+      b.querySelector("img").dataset.photo = id;
+      b.onclick = () => goTo(id);
+      V.glow(b);
+      return b;
+    }));
+    V.fillPhotos(document.getElementById("vGrid"));
+    document.getElementById("vServices").hidden = !svc.length;
+    document.getElementById("vFab").hidden = !enabled.includes("studio");
+    document.querySelector('.v-btn[data-go="product"]').hidden = !enabled.includes("product");
+  }
+
   const { db, trackingUrl } = await import("./lib/firebase.js");
   const { doc, getDoc, getDocs, collection, query, where, writeBatch, serverTimestamp, Timestamp } = await import("https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js");
   const { priceCart, normalizeDzPhone, randomId, shortCode, whatsappLink, clientWhatsappText, buildClientOrder } = await import("./lib/studio-core.js");
@@ -181,7 +250,7 @@
   function loadCart() { try { return JSON.parse(localStorage.getItem("studio-cart") || "[]"); } catch { return []; } }
   function saveCart() { try { localStorage.setItem("studio-cart", JSON.stringify(cart)); } catch { /* navigation privée */ } }
 
-  const TABS = ["studio", "product", "video", "editing", "ad"];
+  const TABS = ["product", "editing", "video", "ad", "studio"]; // ordre d'affichage
   function selectTab(id) {
     for (const b of $("tabs").children) b.setAttribute("aria-selected", String(b.dataset.id === id));
     document.querySelectorAll("section[data-tab]").forEach((s) => (s.hidden = s.dataset.tab !== id));
@@ -559,7 +628,7 @@
     if (!c.exists()) throw new Error(t("notPublished"));
     catalog = c.data().catalog;
     if (k.exists()) contact = { ...contact, ...k.data() };
-    if (contact.studioName) { $("studioName").textContent = contact.studioName; document.title = contact.studioName + " — " + t("pageTitle"); }
+    if (contact.studioName) { setLogo(contact.studioName); document.title = contact.studioName + " — " + t("pageTitle"); }
     $("provisional").hidden = !catalog.provisional;
     const enabled = TABS.filter((id) => catalog[id].enabled);
     $("tabs").replaceChildren(...enabled.map((id) => {
@@ -573,6 +642,7 @@
     saveCart();
     initStudio(); initOthers();
     selectTab(enabled[0]);
+    buildVitrine(enabled);
     $("loading").hidden = true; $("shop").hidden = false;
     renderCart();
   } catch (e) {
