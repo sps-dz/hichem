@@ -166,7 +166,7 @@ Les tests tournent aussi sur GitHub à chaque envoi qui touche `studio/`
 
 ## Photos de la page d'accueil
 
-La page client (habillage « Plateau ») affiche des images d'attente tant que les vraies photos
+La page client affiche, en fond derrière le panneau de réservation, des images d'attente tant que les vraies photos
 ne sont pas fournies. Pour en mettre une : déposer le fichier dans `studio/web/img/`
 (par exemple `hero.jpg`), puis indiquer son chemin dans `PHOTOS` en haut de
 `studio/web/lib/vitrine.js` (`hero`, `product`, `editing`, `video`, `ad`).

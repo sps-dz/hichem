@@ -1,0 +1,78 @@
+/* Habillage « simple » du site client : une grande photo en fond et un panneau
+   blanc posé dessus, qui contient toute la réservation (même déroulé qu'avant).
+   Chargé seulement par les pages client ; la page Équipe n'est pas touchée. */
+body.client.simple {
+  --bg: #f4f5f7; --card: #ffffff; --ink: #17181a; --mute: #5d6168; --line: #e4e6ea;
+  --accent: #2f5cff; --bad: #c2372b; --wa: #1a8a4a; --note: #fff6dc;
+  background: #101113; color: var(--ink); color-scheme: light;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+[dir="rtl"] body.client.simple { font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", "Geeza Pro", system-ui, sans-serif; }
+.simple :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- Photo de fond (diaporama doux) ---------- */
+.s-wall { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #101113; }
+.s-wall img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.04); transition: opacity 1.4s ease, transform 8s ease-out; }
+.s-wall img.on { opacity: 1; transform: none; }
+.s-wall::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.25), transparent 50%); pointer-events: none; }
+[dir="rtl"] .s-wall::after { background: linear-gradient(270deg, rgba(0,0,0,.25), transparent 50%); }
+/* Légende de la photo, en bas : le service montré, cliquable. */
+.s-caption { position: fixed; z-index: 2; bottom: 22px; inset-inline-start: calc(32px + min(460px, 100vw - 64px) + 24px); display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; border: 0; background: rgba(255,255,255,.92); color: var(--ink); font: 600 14px/1.2 inherit; font-family: inherit; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.18); min-height: 40px; }
+.s-caption::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+/* ---------- Barre du haut ---------- */
+.s-nav { position: relative; z-index: 3; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 18px 32px 0; }
+.s-logo { margin: 0; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #fff; color: var(--ink); font: 800 17px/1 inherit; font-family: inherit; letter-spacing: -.01em; box-shadow: 0 6px 20px rgba(0,0,0,.15); }
+.s-logo::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff 0 15%, var(--accent) 60%); }
+.s-nav .langs { background: #fff; border-radius: 999px; padding: 4px; gap: 2px; box-shadow: 0 6px 20px rgba(0,0,0,.15); }
+.s-nav .langs button { border: 0; border-radius: 999px; background: transparent; min-height: 36px; }
+.s-nav .langs button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+
+/* ---------- Le panneau : toute la réservation ---------- */
+.simple main.s-panel { position: relative; z-index: 3; width: min(460px, calc(100vw - 32px)); max-width: none; margin: 22px 0 120px; margin-inline-start: 32px; padding: 22px 22px 26px; background: var(--card); border-radius: 18px; box-shadow: 0 20px 60px -20px rgba(0,0,0,.45); }
+.simple .s-panel h1 { font-size: 26px; line-height: 1.15; letter-spacing: -.02em; margin: 0 0 4px; }
+.simple .s-panel .lead { font-size: 16px; color: var(--mute); margin-top: 6px; }
+/* Dans le panneau, les sections ne sont plus des cartes : de simples blocs séparés par un trait. */
+.simple .s-panel section { background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 18px 0 0; margin-top: 18px; }
+.simple .s-panel .how { background: var(--bg); border: 0; }
+.simple .s-panel .pickgrid { grid-template-columns: 1fr; gap: 14px; }
+.simple .s-panel .grid3 { grid-template-columns: 1fr; }
+.simple .s-panel .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.simple .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.simple .services .service { border-radius: 12px; }
+.simple .services .service[data-id="studio"] { grid-column: 1 / -1; }
+.simple button.primary.big, .simple a.button.big { border-radius: 999px; min-height: 52px; font-size: 16px; }
+.simple input, .simple select, .simple textarea { background: #fff; border-radius: 10px; }
+
+/* ---------- Bouton flottant « Louer le studio » (en bas à droite) ---------- */
+.s-fab { position: fixed; right: max(20px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px)); z-index: 50; display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 18px 8px 10px; border-radius: 999px; border: 0; background: #fff; color: var(--ink); font: 700 15px/1.15 inherit; font-family: inherit; cursor: pointer; box-shadow: 0 10px 30px -8px rgba(0,0,0,.45); transition: transform .2s, opacity .3s; }
+[dir="rtl"] .s-fab { padding: 8px 10px 8px 18px; }
+.s-fab:hover { transform: translateY(-2px); }
+/* La petite lumière de studio : une ampoule qui s'allume et rayonne doucement. */
+.s-fab .bulb { position: relative; width: 34px; height: 34px; flex: none; border-radius: 50%; background: radial-gradient(circle at 50% 45%, #fffdf2 0 20%, #ffd98a 45%, #ffae4d 75%); animation: s-breathe 2.4s ease-in-out infinite; }
+.s-fab .bulb::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(255,174,77,.6); animation: s-ring 2.4s ease-out infinite; }
+.s-fab small { display: block; font-weight: 500; font-size: 12px; color: var(--mute); }
+.s-fab.away { opacity: 0; pointer-events: none; transform: translateY(12px); }
+@keyframes s-breathe { 0%, 100% { box-shadow: 0 0 6px 1px rgba(255,190,90,.6); } 50% { box-shadow: 0 0 18px 6px rgba(255,190,90,.9); } }
+@keyframes s-ring { from { transform: scale(.85); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+
+/* ---------- Téléphone : la photo en haut, le panneau en dessous ---------- */
+@media (max-width: 900px) {
+  .s-wall { position: absolute; height: 42vh; min-height: 260px; }
+  .s-wall::after { background: linear-gradient(180deg, rgba(0,0,0,.35), transparent 40%); }
+  .s-nav { padding: 14px 16px 0; }
+  .simple main.s-panel { width: auto; margin: calc(42vh - 130px) 0 0; margin-inline-start: 0; border-radius: 22px 22px 0 0; padding: 22px 16px 120px; min-height: 60vh; box-shadow: 0 -10px 30px -10px rgba(0,0,0,.35); }
+  body.client.simple { background: var(--card); }
+  .s-caption { position: absolute; top: calc(42vh - 180px); bottom: auto; inset-inline-start: 16px; }
+}
+@media (max-width: 420px) { .s-fab small { display: none; } .s-fab { min-height: 48px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .s-wall img { transition: opacity .01s; transform: none; }
+  .s-fab .bulb, .s-fab .bulb::after { animation: none; }
+}
+
+/* Page de suivi : pas de photo, le panneau est centré sur un fond clair. */
+body.client.simple.track { background: var(--bg); }
+.simple.track main.s-panel { margin: 32px auto 64px; }
+@media (max-width: 900px) { .simple.track main.s-panel { margin: 0; border-radius: 0; min-height: 100vh; padding-bottom: 40px; } }

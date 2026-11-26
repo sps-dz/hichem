@@ -118,3 +118,14 @@ export function glow(card) {
     card.style.setProperty("--ox", e.clientX - r.left + "px"); card.style.setProperty("--oy", e.clientY - r.top + "px");
   });
 }
+
+/** Diaporama de fond : une photo par service, fondu enchaîné toutes les 7 s. */
+export function slideshow(wall, keys, onShow) {
+  wall.replaceChildren(...keys.map((k) => { const img = document.createElement("img"); img.alt = ""; img.dataset.photo = k; return img; }));
+  fillPhotos(wall);
+  const imgs = [...wall.children];
+  let i = 0;
+  const show = (n) => { imgs.forEach((im, j) => im.classList.toggle("on", j === n)); onShow?.(keys[n]); };
+  show(0);
+  if (imgs.length > 1 && !reduce) setInterval(() => { if (!document.hidden) show((i = (i + 1) % imgs.length)); }, 7000);
+}
