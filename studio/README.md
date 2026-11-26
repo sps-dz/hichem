@@ -170,3 +170,13 @@ La page client (habillage « Plateau ») affiche des images d'attente tant que l
 ne sont pas fournies. Pour en mettre une : déposer le fichier dans `studio/web/img/`
 (par exemple `hero.jpg`), puis indiquer son chemin dans `PHOTOS` en haut de
 `studio/web/lib/vitrine.js` (`hero`, `product`, `editing`, `video`, `ad`).
+
+## Site client modifiable par l'admin
+
+Page Équipe → « Site client » (rôle admin) : photos de la page d'accueil, textes dans les
+3 langues (case vide = texte d'origine) et catalogues en carrousel. Tout est publié d'un coup
+avec « Enregistrer et publier » dans `publicSettings/site`. Les photos sont réduites dans le
+navigateur (1600 px, JPEG) et rangées dans `siteMedia/{id}` (moins de 1 Mo chacune) : le forfait
+gratuit n'a pas de stockage de fichiers. Une photo retirée est supprimée de la base à
+l'enregistrement. Ordre d'affichage d'une photo : choisie par l'admin, sinon fichier `img/`,
+sinon image dessinée.

@@ -85,6 +85,40 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    // Contenu du site client choisi par l'admin : photos affichées, textes dans les
+    // 3 langues, carrousels (catalogues de photos). Les photos sont dans siteMedia.
+    match /publicSettings/site {
+      allow read: if true;
+      allow write: if isAdmin() && audited()
+        && request.resource.data.keys().hasOnly(['photos', 'texts', 'carousels', 'updatedAt', 'auditId'])
+        && request.resource.data.photos is map
+        && request.resource.data.photos.keys().hasOnly(['hero', 'product', 'editing', 'video', 'ad', 'studio'])
+        && request.resource.data.texts is map
+        && request.resource.data.texts.keys().hasOnly(['fr', 'ar', 'en'])
+        && request.resource.data.carousels is list
+        && request.resource.data.carousels.size() <= 30
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // Photos du site (réduites dans le navigateur, en JPEG ou WebP encodé en base64,
+    // moins de 1 Mo par document : le forfait gratuit n'a pas de stockage de fichiers).
+    match /siteMedia/{id} {
+      allow read: if true;
+      allow create: if isAdmin()
+        && id.matches('^[A-Za-z0-9]{20}$')
+        && request.resource.data.keys().hasOnly(['type', 'data', 'w', 'h', 'createdAt', 'createdBy'])
+        && request.resource.data.type in ['image/jpeg', 'image/webp']
+        && request.resource.data.data is string
+        && request.resource.data.data.size() > 100
+        && request.resource.data.data.size() <= 950000
+        && request.resource.data.w is int && request.resource.data.w > 0 && request.resource.data.w <= 4000
+        && request.resource.data.h is int && request.resource.data.h > 0 && request.resource.data.h <= 4000
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
     match /catalogVersions/{version} {
       // L'équipe relit la version d'une commande pour recalculer son prix.
       allow read: if isStaff();

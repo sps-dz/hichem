@@ -28,6 +28,23 @@
   .order .ok { color: var(--accent); font-size: 13px; }
   .inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
   .inline input, .inline select { width: auto; }
+  /* Site client */
+  .sphotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .sslot { display: grid; gap: 6px; align-content: start; }
+  .sthumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center; color: var(--mute); font-size: 13px; }
+  .sthumb.big { aspect-ratio: 4 / 5; }
+  .stexts { width: 100%; }
+  .stexts td { vertical-align: top; padding: 4px; }
+  .stexts td:first-child { font-size: 13px; color: var(--mute); width: 22%; }
+  .stexts input, .stexts textarea { min-width: 140px; padding: 6px 8px; }
+  .scar { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; display: grid; gap: 8px; }
+  .slangs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  @media (max-width: 640px) { .slangs { grid-template-columns: 1fr; } }
+  .sstrip { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+  .scell { position: relative; }
+  .scell .sthumb { aspect-ratio: 4 / 5; }
+  .sbar { position: absolute; inset: auto 4px 4px; display: flex; gap: 4px; justify-content: center; }
+  .sbar button { padding: 2px 8px; min-height: 0; font-size: 13px; background: rgba(255,255,255,.92); color: #1d1d1b; }
 </style>
 </head>
 <body>
@@ -166,6 +183,25 @@
     <div class="actions">
       <button class="primary" id="publishOther">Publier les nouveaux tarifs</button>
       <button id="resetOther">Annuler mes modifications</button>
+    </div>
+  </section>
+
+  <section id="sitePanel" hidden>
+    <h2>Site client : photos, textes et catalogues</h2>
+    <p class="mute">Choisissez ce que les clients voient sur la page d'accueil, en français, en arabe et en anglais. Rien ne change pour eux avant « Enregistrer et publier ».</p>
+    <h3>Photos de la page d'accueil</h3>
+    <p class="mute small">Les photos sont réduites automatiquement (1600 px) avant l'envoi. Une photo en largeur rend mieux pour le grand visuel du haut.</p>
+    <div id="sPhotos" class="sphotos"></div>
+    <h3 style="margin-top:20px">Textes</h3>
+    <p class="mute small">Case vide = texte d'origine (affiché en gris). Écrivez seulement ce que vous voulez changer.</p>
+    <div class="tablewrap" id="sTexts"></div>
+    <h3 style="margin-top:20px">Catalogues (carrousels)</h3>
+    <p class="mute small">Chaque catalogue s'affiche comme une publication Instagram à plusieurs photos : le client fait glisser pour passer d'une photo à l'autre.</p>
+    <div id="sCars"></div>
+    <button id="sAddCar">+ Ajouter un catalogue</button>
+    <div class="actions">
+      <button class="primary" id="sSave">Enregistrer et publier</button>
+      <button id="sReset">Annuler mes modifications</button>
     </div>
   </section>
 
@@ -790,7 +826,7 @@ L'acompte de ${fmtDA(o.deposit.amount)} est déjà reçu : vous pourrez enregist
 
   // ---------- Sauvegarde ----------
   $("exportDb").onclick = (e) => busy(e.target, async () => {
-    const names = ["orders", "payments", "days", "staff", "staffInvites", "catalogVersions", "publicSettings", "counters", "auditLogs"];
+    const names = ["orders", "payments", "days", "staff", "staffInvites", "catalogVersions", "publicSettings", "counters", "auditLogs", "siteMedia"];
     const plain = (v) => v && typeof v.toDate === "function" ? v.toDate().toISOString() : Array.isArray(v) ? v.map(plain) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)])) : v;
     const out = { exportedAt: new Date().toISOString(), project: app.options.projectId, collections: {} };
     for (const n of names) out.collections[n] = Object.fromEntries((await getDocs(collection(db, n))).docs.map((d) => [d.id, plain(d.data())]));
@@ -801,7 +837,7 @@ L'acompte de ${fmtDA(o.deposit.amount)} est déjà reçu : vous pourrez enregist
 
   // ---------- Affichage selon le rôle ----------
   async function render(user) {
-    for (const id of ["signedIn", "ordersPanel", "paymentsPanel", "adminPanel", "ratesPanel", "otherPanel", "bootstrap", "join", "verifyInfo", "noAccess"]) $(id).hidden = true;
+    for (const id of ["signedIn", "ordersPanel", "paymentsPanel", "adminPanel", "ratesPanel", "otherPanel", "sitePanel", "bootstrap", "join", "verifyInfo", "noAccess"]) $(id).hidden = true;
     $("signedOut").hidden = !!user;
     me = null;
     if (!user) return;
@@ -847,6 +883,9 @@ L'acompte de ${fmtDA(o.deposit.amount)} est déjà reçu : vous pourrez enregist
     if (role === "admin") {
       $("adminPanel").hidden = false;
       await Promise.all([loadStaff(), loadContact(), loadCatalog()]).catch(fail);
+      $("sitePanel").hidden = false;
+      const { initSitePanel } = await import("./site.js");
+      await initSitePanel({ db, me, audit, show, busy, $, el })().catch(fail);
     }
   }
   onAuthStateChanged(auth, (u) => render(u).catch(fail));

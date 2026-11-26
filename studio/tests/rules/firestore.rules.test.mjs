@@ -389,6 +389,29 @@ test("annulation après acompte : l'équipe libère le créneau et enregistre le
   await assertFails(updateDoc(doc(as("anon"), "tracking", o.token), { refunded: 9999, updatedAt: serverTimestamp() }));
 });
 
+test("site client : seul l'admin choisit les photos, les textes et les carrousels", async () => {
+  const media = (db, uid, extra = {}) => setDoc(doc(db, "siteMedia", rid("med" + (++seq), 20)), { type: "image/jpeg", data: "A".repeat(2000), w: 1200, h: 800, createdAt: serverTimestamp(), createdBy: uid, ...extra });
+  await assertSucceeds(media(as("boss"), "boss"));
+  await assertFails(media(as("amel"), "amel"));
+  await assertFails(media(as("anon"), "anon"));
+  await assertFails(media(as("boss"), "boss", { type: "text/html" }));
+  await assertFails(media(as("boss"), "boss", { data: "A".repeat(960000) }));
+  await assertFails(media(as("boss"), "amel"));
+  const save = (db, uid, role, data) => {
+    const w = writeBatch(db);
+    const auditId = auditEntry(db, w, uid, role, "site.save");
+    w.set(doc(db, "publicSettings", "site"), { photos: {}, texts: { fr: {}, ar: {}, en: {} }, carousels: [], ...data, updatedAt: serverTimestamp(), auditId });
+    return w.commit();
+  };
+  await assertSucceeds(save(as("boss"), "boss", "admin", { photos: { hero: "x" }, texts: { fr: { vTitle1: "Bonjour" }, ar: {}, en: {} }, carousels: [{ id: "c1", title: { fr: "Parfums" }, media: ["x"] }] }));
+  await assertFails(save(as("amel"), "amel", "employee", {}));
+  await assertFails(save(as("boss"), "boss", "admin", { photos: { inconnu: "x" } }));
+  await assertFails(save(as("boss"), "boss", "admin", { texts: { de: {} } }));
+  await assertSucceeds(read(as("anon"), "publicSettings/site"));
+  // Sans journal d'audit : refusé.
+  await assertFails(setDoc(doc(as("boss"), "publicSettings", "site"), { photos: {}, texts: {}, carousels: [], updatedAt: serverTimestamp() }));
+});
+
 test("tout le reste est fermé", async () => {
   for (const who of ["anon", "inconnu", "amel", "boss"]) {
     await assertFails(setDoc(doc(as(who), "inconnu/y"), { a: 1 }));

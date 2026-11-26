@@ -84,6 +84,26 @@ body.client.plateau {
 .v-card .go { margin-top: 6px; color: var(--tung); font-weight: 700; font-size: 14px; }
 .v-card:focus-visible { outline: 3px solid var(--tung); outline-offset: 2px; }
 
+/* ---------- Catalogues : carrousels à faire glisser ---------- */
+.v-cars { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 18px; }
+.v-car { display: grid; gap: 10px; align-content: start; }
+.v-car .frame { position: relative; border-radius: 14px; overflow: hidden; background: #1d1814; border: 1px solid #2c2520; }
+.v-car .track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.v-car .track::-webkit-scrollbar { display: none; }
+.v-car .track:focus-visible { outline: 3px solid var(--tung); outline-offset: -3px; }
+.v-car .slide { flex: 0 0 100%; margin: 0; aspect-ratio: 4 / 5; scroll-snap-align: start; scroll-snap-stop: always; }
+.v-car .slide img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.v-car .nav { position: absolute; top: 50%; translate: 0 -50%; width: 36px; height: 36px; min-height: 0; padding: 0; border-radius: 50%; border: 0; background: rgba(255,255,255,.88); color: #1a0f05; font: 700 22px/1 inherit; font-family: inherit; display: grid; place-items: center; cursor: pointer; }
+.v-car .nav.prev { inset-inline-start: 10px; }
+.v-car .nav.next { inset-inline-end: 10px; }
+@media (hover: none) { .v-car .nav { display: none; } }
+.v-car .count { position: absolute; top: 10px; inset-inline-end: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; font-weight: 600; }
+.v-car .dots { display: flex; justify-content: center; gap: 5px; }
+.v-car .dots i { width: 6px; height: 6px; border-radius: 50%; background: #4a4038; transition: background .2s, transform .2s; }
+.v-car .dots i.on { background: var(--tung); transform: scale(1.25); }
+.v-car .cap b { font: 800 22px/1.1 var(--display); text-transform: uppercase; }
+.v-car .cap p { margin: 4px 0 0; color: var(--mute); font-size: 15px; }
+
 /* ---------- Réserver ---------- */
 #reserver { scroll-margin-top: 12px; }
 .plateau .v-booktitle { margin: 28px 0 0; font: 800 clamp(30px, 4.4vw, 46px)/1 var(--display); text-transform: uppercase; }

@@ -32,6 +32,11 @@
   <p data-i18n="vSvcLead"></p>
   <div class="v-grid" id="vGrid"></div>
 </section>
+<section class="v-sect" id="vCars" hidden aria-labelledby="vCarTitle">
+  <h2 id="vCarTitle" data-i18n="vCarTitle"></h2>
+  <p data-i18n="vCarLead"></p>
+  <div class="v-cars" id="vCarList"></div>
+</section>
 <button type="button" class="v-fab" id="vFab" data-go="studio"><span class="bulb" aria-hidden="true"></span><span><span data-i18n="vFab"></span><small data-i18n="vFabSub"></small></span></button>
 <main id="reserver">
   <h2 class="v-booktitle" data-i18n="vBookTitle"></h2>
@@ -183,7 +188,7 @@
 </main>
 
 <script type="module">
-  import { lang, t, tr, money, duration, ltr, applyPage } from "./lib/i18n.js";
+  import { lang, t, tr, money, duration, ltr, applyPage, setOverrides } from "./lib/i18n.js";
   applyPage(document.getElementById("langs"));
   document.title = "Studio — " + t("pageTitle");
 
@@ -231,6 +236,54 @@
     document.getElementById("vServices").hidden = !svc.length;
     document.getElementById("vFab").hidden = !enabled.includes("studio");
     document.querySelector('.v-btn[data-go="product"]').hidden = !enabled.includes("product");
+  }
+
+  // ---------- Contenu choisi par l'équipe : textes, photos, catalogues ----------
+  const SC = await import("./lib/sitecontent.js");
+  async function applySite(site, media) {
+    setOverrides(site.texts);
+    applyPage(null);
+    V.riseTitle(document.getElementById("vTitle"), t("vTitle1"), t("vTitle2"));
+    await Promise.all(Object.entries(site.photos || {}).map(async ([slot, id]) => { const src = await media(id); if (src) V.PHOTOS[slot] = src; }));
+    V.fillPhotos();
+    renderCarousels((site.carousels || []).filter((c) => c.media?.length), media);
+  }
+  // Un catalogue = un carrousel à faire glisser, comme une publication Instagram à plusieurs photos.
+  function renderCarousels(cars, media) {
+    const box = document.getElementById("vCarList");
+    const rtl = document.dir === "rtl";
+    box.replaceChildren(...cars.map((car) => {
+      const title = SC.pick(car.title, lang), caption = SC.pick(car.caption, lang);
+      const imgs = car.media.map(() => Object.assign(document.createElement("img"), { alt: "", loading: "lazy", decoding: "async" }));
+      const track = el("div", { className: "track", tabIndex: 0 }, ...imgs.map((img) => el("figure", { className: "slide" }, img)));
+      track.setAttribute("aria-label", title || t("vCarTitle"));
+      const dots = el("div", { className: "dots", ariaHidden: "true" }, ...car.media.map(() => el("i")));
+      const count = el("span", { className: "count", dir: "ltr" });
+      const prev = el("button", { type: "button", className: "nav prev", textContent: rtl ? "›" : "‹" });
+      const next = el("button", { type: "button", className: "nav next", textContent: rtl ? "‹" : "›" });
+      prev.setAttribute("aria-label", t("carPrev")); next.setAttribute("aria-label", t("carNext"));
+      const step = (d) => track.scrollBy({ left: d * track.clientWidth * (rtl ? -1 : 1), behavior: "smooth" });
+      prev.onclick = () => step(-1); next.onclick = () => step(1);
+      const sync = () => {
+        const i = Math.round(Math.abs(track.scrollLeft) / Math.max(1, track.clientWidth));
+        [...dots.children].forEach((d, j) => d.classList.toggle("on", j === i));
+        count.textContent = `${i + 1}/${car.media.length}`;
+        prev.hidden = i === 0; next.hidden = i >= car.media.length - 1;
+      };
+      track.addEventListener("scroll", () => requestAnimationFrame(sync), { passive: true });
+      const card = el("article", { className: "v-car" }, el("div", { className: "frame" }, track, prev, next, count), dots);
+      if (title || caption) card.append(el("div", { className: "cap" }, ...(title ? [el("b", { textContent: title })] : []), ...(caption ? [el("p", { textContent: caption })] : [])));
+      if (car.media.length < 2) { dots.hidden = true; count.hidden = true; }
+      // Les photos se chargent quand le catalogue arrive à l'écran.
+      new IntersectionObserver(([e], obs) => {
+        if (!e.isIntersecting) return;
+        obs.disconnect();
+        car.media.forEach((id, j) => media(id).then((src) => { if (src) imgs[j].src = src; }));
+      }, { rootMargin: "300px" }).observe(card);
+      requestAnimationFrame(sync);
+      return card;
+    }));
+    document.getElementById("vCars").hidden = !cars.length;
   }
 
   const { db, trackingUrl } = await import("./lib/firebase.js");
@@ -624,7 +677,10 @@
 
   // ---------- Démarrage ----------
   try {
-    const [c, k] = await Promise.all([getDoc(doc(db, "publicSettings", "catalog")), getDoc(doc(db, "publicSettings", "contact"))]);
+    const [c, k, st] = await Promise.all([getDoc(doc(db, "publicSettings", "catalog")), getDoc(doc(db, "publicSettings", "contact")),
+      getDoc(doc(db, "publicSettings", "site")).catch(() => null)]);
+    // Le contenu choisi par l'équipe ne doit jamais empêcher de réserver.
+    if (st?.exists()) await applySite(st.data(), SC.mediaLoader(db, { doc, getDoc })).catch(() => {});
     if (!c.exists()) throw new Error(t("notPublished"));
     catalog = c.data().catalog;
     if (k.exists()) contact = { ...contact, ...k.data() };

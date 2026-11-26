@@ -42,6 +42,8 @@ const D = {
     vCardGo: "Choisir et voir le prix",
     vFab: "Louer le studio", vFabSub: "Heures libres en direct",
     vBookTitle: "Réserver",
+    vCarTitle: "Nos catalogues", vCarLead: "Faites glisser pour voir toutes les photos.",
+    carPrev: "Photo précédente", carNext: "Photo suivante",
     intro: "Louez le studio à l'heure ou confiez-nous vos photos et vidéos. Le prix s'affiche tout de suite, sans engagement.",
     howTitle: "Comment ça marche ?",
     how1: "Choisissez un service et vos options : le prix se calcule tout seul.",
@@ -161,6 +163,8 @@ const D = {
     vCardGo: "اختر واطّلع على السعر",
     vFab: "كراء الاستوديو", vFabSub: "الساعات المتاحة مباشرة",
     vBookTitle: "الحجز",
+    vCarTitle: "كتالوجاتنا", vCarLead: "اسحب لرؤية كل الصور.",
+    carPrev: "الصورة السابقة", carNext: "الصورة التالية",
     intro: "استأجر الاستوديو بالساعة أو اترك لنا تصوير صورك وفيديوهاتك. يظهر السعر فورًا ودون أي التزام.",
     howTitle: "كيف يعمل الحجز؟",
     how1: "اختر الخدمة والخيارات التي تريدها: يُحسب السعر تلقائيًا.",
@@ -279,6 +283,8 @@ const D = {
     vCardGo: "Choose and see the price",
     vFab: "Rent the studio", vFabSub: "Free hours, live",
     vBookTitle: "Book",
+    vCarTitle: "Our catalogues", vCarLead: "Swipe to see all the photos.",
+    carPrev: "Previous photo", carNext: "Next photo",
     intro: "Rent the studio by the hour or let us handle your photos and videos. The price shows right away, with no commitment.",
     howTitle: "How does it work?",
     how1: "Pick a service and your options: the price is calculated for you.",
@@ -391,9 +397,17 @@ const D = {
 };
 const dict = D[lang];
 
+// Textes changés par l'équipe (page Équipe → « Site client »), par langue.
+let overrides = {};
+/** Applique les textes choisis par l'équipe : { fr: { clé: texte }, ar: {…}, en: {…} }. */
+export function setOverrides(texts) { overrides = (texts && texts[lang]) || {}; }
+/** Texte d'origine (sans les changements de l'équipe), pour la page Équipe. */
+export const defaultText = (l, key) => (D[l] && D[l][key]) ?? D.fr[key] ?? "";
+
 /** Texte traduit, avec remplacement de {x}. */
 export function t(key, vars = {}) {
-  const s = dict[key] ?? D.fr[key] ?? key;
+  const o = overrides[key];
+  const s = (typeof o === "string" && o.trim()) ? o : dict[key] ?? D.fr[key] ?? key;
   return typeof s === "string" ? s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? "")) : s;
 }
 
