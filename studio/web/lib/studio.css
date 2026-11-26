@@ -122,3 +122,4 @@ section .steph:first-child { margin-top: 0; }
 [dir="rtl"] .calhead { text-transform: none; }
 [dir="rtl"] .calwd { font-size: 11px; }
 [hidden] { display: none !important; }
+button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }

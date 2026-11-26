@@ -71,6 +71,7 @@
       <button id="oReload">Actualiser</button>
     </div>
     <p id="expiredBox" class="note" hidden><span id="expiredCount"></span> demande(s) n'ont pas versé l'acompte dans le délai : leur créneau reste bloqué. <button id="releaseExpired">Annuler et libérer les créneaux</button></p>
+    <p id="clientCancelBox" class="note" hidden><span id="clientCancelText"></span> <button id="showClientCancels">Voir les annulations</button></p>
     <div id="orders"></div>
   </section>
 
@@ -279,6 +280,8 @@
     card.append(lines);
     if (o.note) card.append(el("p", { className: "small", textContent: "Message : " + o.note }));
     if (o.deposit) card.append(el("p", { className: "small ok", textContent: `Acompte ${fmtDA(o.deposit.amount)} (${METHOD_LABEL[o.deposit.method]}) reçu.` }));
+    if (o.cancelledBy === "client") card.append(el("p", { className: "small warn", textContent: "Annulée par le client" + (o.cancelledAt ? " le " + algiersLabel(o.cancelledAt.toMillis()) : "") + (o.cancelReason ? " — raison : " + o.cancelReason : "") + "." }));
+    if (o.refund) card.append(el("p", { className: "small ok", textContent: `Acompte remboursé : ${fmtDA(o.refund.amount)} (${METHOD_LABEL[o.refund.method]}).` }));
 
     // Contrôles : prix recalculé avec le tarif de la demande, tranches bien bloquées.
     const checks = el("div");
@@ -325,8 +328,34 @@
     }
     if (canOperate && (o.status === "pending" || o.status === "confirmed")) {
       const b = el("button", { textContent: "Annuler" });
-      b.onclick = () => { if (confirm("Annuler cette demande et libérer son créneau ?")) busy(b, () => cancelOrder(id, o)); };
+      const q = o.deposit
+        ? `Annuler cette demande et libérer son créneau ?
+
+L'acompte de ${fmtDA(o.deposit.amount)} est déjà reçu : vous pourrez enregistrer son remboursement juste après.`
+        : "Annuler cette demande et libérer son créneau ?";
+      b.onclick = () => { if (confirm(q)) busy(b, () => cancelOrder(id, o)); };
       actions.append(b);
+    }
+    // Demande annulée (par le client ou l'équipe) : créneau encore bloqué, acompte à rembourser.
+    if (canOperate && o.status === "cancelled") {
+      const held = await heldSlots(id, o);
+      if (held) {
+        checks.append(el("div", { className: "warn", textContent: `⚠ Créneau encore bloqué pour cette demande annulée (${held} tranche(s)).` }));
+        const b = el("button", { className: "primary", textContent: "Libérer le créneau" });
+        b.onclick = () => busy(b, async () => { await releaseOrder(id, o, "order.release"); show("Créneau libéré."); await loadOrders(); await checkClientCancels(); });
+        actions.append(b);
+      }
+      if (o.deposit && !o.refund) {
+        checks.append(el("div", { className: "warn", textContent: `⚠ Acompte de ${fmtDA(o.deposit.amount)} reçu et pas encore remboursé.` }));
+        const amount = el("input", { type: "number", min: "1", step: "100", value: String(o.deposit.amount) });
+        amount.setAttribute("aria-label", "Montant remboursé");
+        const method = el("select");
+        for (const [v, l] of Object.entries(METHOD_LABEL)) method.append(new Option(l, v));
+        method.value = o.deposit.method;
+        const b = el("button", { textContent: "Remboursement fait → enregistrer" });
+        b.onclick = () => busy(b, () => recordRefund(id, o, Number(amount.value), method.value));
+        actions.append(amount, method, b);
+      }
     }
     card.append(actions);
     return card;
@@ -417,6 +446,45 @@
     });
   }
 
+  /** Nombre de tranches qui appartiennent encore à cette demande dans days/. */
+  async function heldSlots(id, o) {
+    let held = 0;
+    for (const [date, hms] of Object.entries(o.slots || {})) {
+      const day = await getDoc(doc(db, "days", date));
+      const map = day.exists() ? day.data().slots || {} : {};
+      held += hms.filter((hm) => map[hm] && map[hm].o === id).length;
+    }
+    return held;
+  }
+
+  /** Remboursement de l'acompte : encaissement négatif, demande et suivi mis à jour, journal. */
+  async function recordRefund(id, o, amount, method) {
+    if (!Number.isInteger(amount) || amount <= 0) throw new Error("Montant du remboursement invalide.");
+    if (o.deposit && amount > o.deposit.amount && !confirm(`Rembourser ${fmtDA(amount)}, plus que l'acompte reçu (${fmtDA(o.deposit.amount)}) ?`)) return;
+    const w = writeBatch(db);
+    const auditId = audit(w, "order.refund", "orders", id, null, { refund: amount, method });
+    w.update(doc(db, "orders", id), { refund: { amount, method, at: serverTimestamp(), by: me.uid }, updatedAt: serverTimestamp(), updatedBy: me.uid, auditId });
+    w.update(doc(db, "tracking", o.trackingToken), { refunded: amount, updatedAt: serverTimestamp(), auditId });
+    w.set(doc(collection(db, "payments")), { orderId: id, ref: o.ref || "", kind: "refund", amount, method, note: "", recordedAt: serverTimestamp(), recordedBy: me.uid, auditId });
+    await w.commit();
+    show("Remboursement enregistré.");
+    await loadOrders(); await checkClientCancels();
+    if ($("paymentsPanel").hidden === false) await loadPayments().catch(() => {});
+  }
+
+  // Annulations faites par les clients : créneau encore bloqué ou acompte à rembourser.
+  async function checkClientCancels() {
+    const snap = await getDocs(query(collection(db, "orders"), where("status", "==", "cancelled"), where("cancelledBy", "==", "client"), limit(100)));
+    let todo = 0;
+    for (const d of snap.docs) {
+      const o = d.data();
+      if ((o.deposit && !o.refund) || (await heldSlots(d.id, o))) todo++;
+    }
+    $("clientCancelBox").hidden = !todo;
+    $("clientCancelText").textContent = `${todo} demande(s) annulée(s) par le client à traiter (créneau à libérer ou acompte à rembourser).`;
+  }
+  $("showClientCancels").onclick = (e) => busy(e.target, async () => { $("oFilter").value = "cancelled"; await loadOrders(); });
+
   async function cancelOrder(id, o) {
     await releaseOrder(id, o, "order.cancel");
     show("Demande annulée, créneau libéré.");
@@ -459,7 +527,7 @@
       const p = d.data();
       return el("tr", {}, el("td", { textContent: p.recordedAt ? algiersLabel(p.recordedAt.toMillis()) : "" }), clientCell(p),
         el("td", { textContent: { deposit: "Acompte", balance: "Reste", refund: "Remboursement" }[p.kind] }), el("td", { textContent: METHOD_LABEL[p.method] }),
-        el("td", { textContent: fmtDA(p.amount), style: "text-align:right" }));
+        el("td", { textContent: (p.kind === "refund" ? "− " : "") + fmtDA(p.amount), style: "text-align:right" + (p.kind === "refund" ? ";color:var(--bad)" : "") }));
     }));
   }
 
@@ -774,7 +842,7 @@
     me = { uid: user.uid, email: user.email, role };
     $("ordersPanel").hidden = false;
     await loadOrders().catch(fail);
-    if (role !== "accountant") await checkExpired().catch(fail);
+    if (role !== "accountant") { await checkExpired().catch(fail); await checkClientCancels().catch(fail); }
     if (role === "admin" || role === "accountant") { $("paymentsPanel").hidden = false; await loadPayments().catch(fail); }
     if (role === "admin") {
       $("adminPanel").hidden = false;

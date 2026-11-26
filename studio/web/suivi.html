@@ -19,10 +19,21 @@
   <section id="card" hidden>
     <p><span data-i18n="doneCode"></span> <strong id="code" dir="ltr"></strong><span id="ref" dir="ltr"></span> — <span id="status" class="status"></span></p>
     <p id="explain" class="desc"></p>
+    <p id="refundInfo" class="note" hidden></p>
     <div id="lines" class="totals"></div>
     <div id="pay" class="note" hidden></div>
     <a class="button whatsapp big" id="wa" target="_blank" rel="noopener" hidden data-i18n="writeStudio"></a>
     <p class="mute small" id="when"></p>
+    <div id="cancelBox" hidden>
+      <button type="button" class="link" id="cancelOpen" data-i18n="cancelOpen"></button>
+      <div id="cancelForm" class="note" hidden>
+        <p id="cancelWarn"></p>
+        <label><span data-i18n="cancelReason"></span><textarea id="cancelReason" rows="2" maxlength="300"></textarea></label>
+        <button type="button" class="big danger" id="cancelYes" data-i18n="cancelYes"></button>
+        <button type="button" class="big" id="cancelNo" data-i18n="cancelNo"></button>
+        <p class="msg bad" id="cancelMsg" role="alert" hidden></p>
+      </div>
+    </div>
   </section>
   <p class="actions"><a class="button" href="./" data-i18n="newReq"></a></p>
 </main>
@@ -38,7 +49,7 @@
     const token = new URLSearchParams(location.search).get("t") || "";
     if (!/^[A-Za-z0-9]{32}$/.test(token)) throw new Error(t("badLink"));
     const { db } = await import("./lib/firebase.js");
-    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js");
+    const { doc, getDoc, writeBatch, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js");
     const { whatsappLink, algiersLabel } = await import("./lib/studio-core.js");
     const [snap, contactSnap] = await Promise.all([getDoc(doc(db, "tracking", token)), getDoc(doc(db, "publicSettings", "contact"))]);
     if (!snap.exists()) throw new Error(t("notFound"));
@@ -50,7 +61,8 @@
     $("status").className = "status " + d.status;
     const expired = d.status === "pending" && d.holdExpiresAt && d.holdExpiresAt.toMillis() < Date.now();
     // Un message écrit par l'équipe reste tel quel ; sinon, explication dans la langue du client.
-    $("explain").textContent = d.message || {
+    const byClient = d.cancelledBy === "client";
+    $("explain").textContent = d.message || (d.status === "cancelled" && byClient ? t("e_cancelledClient") : "") || {
       pending: expired ? t("e_expired") :
         (d.quotePending ? t("e_quote") : t("e_saved") + (d.holdExpiresAt ? t("e_hold", { d: ltr(algiersLabel(d.holdExpiresAt.toMillis())) }) : "")),
       confirmed: t("e_confirmed"),
@@ -70,8 +82,33 @@
     }
     if (contact.whatsapp) {
       // Message au studio, en français pour l'équipe.
-      $("wa").href = whatsappLink(contact.whatsapp, `Bonjour, je vous écris au sujet de ma demande n° ${d.code}${d.ref ? ` (${d.ref})` : ""}.\nSuivi : ${location.href}` + (t("clientLang") ? `\nLangue du client : ${t("clientLang")}` : ""));
+      $("wa").href = whatsappLink(contact.whatsapp, `Bonjour, ${d.status === "cancelled" && byClient ? "j'ai annulé" : "je vous écris au sujet de"} ma demande n° ${d.code}${d.ref ? ` (${d.ref})` : ""}.\nSuivi : ${location.href}` + (t("clientLang") ? `\nLangue du client : ${t("clientLang")}` : ""));
       $("wa").hidden = false;
+    }
+    // Annulée après l'acompte (la référence n'existe qu'une fois l'acompte reçu) : où en est le remboursement.
+    if (d.status === "cancelled" && (d.ref || d.refunded)) {
+      $("refundInfo").textContent = d.refunded ? t("e_refunded", { p: money(d.refunded) }) : t("e_refundWait");
+      $("refundInfo").hidden = false;
+    }
+    // Annulation par le client, avant ou après l'acompte.
+    if (d.status === "pending" || d.status === "confirmed") {
+      $("cancelBox").hidden = false;
+      $("cancelWarn").textContent = d.ref ? t("cancelWarnPaid") : t("cancelWarnPending");
+      $("cancelOpen").onclick = () => { $("cancelForm").hidden = false; $("cancelOpen").hidden = true; $("cancelReason").focus(); };
+      $("cancelNo").onclick = () => { $("cancelForm").hidden = true; $("cancelOpen").hidden = false; };
+      $("cancelYes").onclick = async () => {
+        const reason = $("cancelReason").value.trim().slice(0, 300);
+        $("cancelYes").disabled = true; $("cancelMsg").hidden = true;
+        try {
+          const b = writeBatch(db);
+          b.update(doc(db, "orders", d.orderId), { status: "cancelled", cancelledBy: "client", cancelReason: reason, cancelledAt: serverTimestamp() });
+          b.update(doc(db, "tracking", token), { status: "cancelled", cancelledBy: "client", cancelReason: reason, updatedAt: serverTimestamp() });
+          await b.commit();
+          location.reload();
+        } catch {
+          $("cancelMsg").textContent = t("cancelFail"); $("cancelMsg").hidden = false; $("cancelYes").disabled = false;
+        }
+      };
     }
     $("when").textContent = d.createdAt ? t("sentOn") + ltr(algiersLabel(d.createdAt.toMillis())) : "";
     $("msg").hidden = true; $("card").hidden = false;

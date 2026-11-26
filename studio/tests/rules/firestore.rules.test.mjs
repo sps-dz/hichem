@@ -185,7 +185,7 @@ test("anti-double réservation : une tranche prise ne peut pas être reprise, m�
   await assertSucceeds(clientOrder(db, { hms: ["1800", "1830"] }).commit());
 });
 
-test("client : ne peut ni modifier, ni annuler, ni libérer une tranche", async () => {
+test("client : ne peut ni modifier, ni annuler sans son lien de suivi, ni libérer une tranche", async () => {
   const db = as("anon");
   const o = clientOrder(db, { hms: ["1100"] });
   await o.commit();
@@ -195,6 +195,49 @@ test("client : ne peut ni modifier, ni annuler, ni libérer une tranche", async 
   await assertFails(deleteDoc(doc(db, "days", DAY)));
   // Bloquer des tranches sans créer de demande : refusé.
   await assertFails(setDoc(doc(db, "days", DAY), { date: DAY, slots: { 1200: { o: o.orderId, s: "hold", u: FUTURE() } }, lastOrderId: o.orderId, updatedAt: serverTimestamp() }, { merge: true }));
+});
+
+/** Annulation par le client, comme la page de suivi la fait (demande + suivi dans le même envoi). */
+function clientCancel(db, o, { reason = "Empêchement", order = true, tracking = true, orderExtra = {}, trackingExtra = {} } = {}) {
+  const b = writeBatch(db);
+  if (order) b.update(doc(db, "orders", o.orderId), { status: "cancelled", cancelledBy: "client", cancelReason: reason, cancelledAt: serverTimestamp(), ...orderExtra });
+  if (tracking) b.update(doc(db, "tracking", o.token), { status: "cancelled", cancelledBy: "client", cancelReason: reason, updatedAt: serverTimestamp(), ...trackingExtra });
+  return b.commit();
+}
+
+test("client : annule sa demande avec son lien de suivi, avant ou après l'acompte", async () => {
+  const db = as("anon");
+  // Avant l'acompte.
+  const o = clientOrder(db, { hms: ["1300"] });
+  await o.commit();
+  // Seulement la demande, ou seulement le suivi : refusé.
+  await assertFails(clientCancel(db, o, { tracking: false }));
+  await assertFails(clientCancel(db, o, { order: false }));
+  // Autre statut, champ en plus, raison trop longue, faux auteur : refusé.
+  await assertFails(clientCancel(db, o, { orderExtra: { status: "done" } }));
+  await assertFails(clientCancel(db, o, { orderExtra: { pricing: { total: 0 } } }));
+  await assertFails(clientCancel(db, o, { reason: "x".repeat(301) }));
+  await assertFails(clientCancel(db, o, { orderExtra: { cancelledBy: "studio" } }));
+  await assertSucceeds(clientCancel(db, o));
+  assert.equal((await getDoc(doc(db, "tracking", o.token))).data().status, "cancelled");
+  // Déjà annulée : on ne la « réannule » pas.
+  await assertFails(clientCancel(db, o));
+  // Après l'acompte (demande confirmée par l'équipe).
+  const o2 = clientOrder(db, { hms: [] });
+  await o2.commit();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "orders", o2.orderId), { status: "confirmed" });
+    await updateDoc(doc(ctx.firestore(), "tracking", o2.token), { status: "confirmed" });
+  });
+  await assertSucceeds(clientCancel(db, o2, { reason: "" }));
+  // Terminée : plus d'annulation.
+  const o3 = clientOrder(db, { hms: [] });
+  await o3.commit();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "orders", o3.orderId), { status: "done" });
+    await updateDoc(doc(ctx.firestore(), "tracking", o3.token), { status: "done" });
+  });
+  await assertFails(clientCancel(db, o3));
 });
 
 // ---------------------------------------------------------------- équipe
@@ -327,6 +370,23 @@ test("annulation : l'équipe libère les tranches ; la tranche redevient libre p
   const a3 = auditEntry(db, w3, "amel", "employee");
   w3.update(doc(db, "orders", o.orderId), { customer: { name: "X", phone: "+213555000000" }, updatedAt: serverTimestamp(), updatedBy: "amel", auditId: a3 });
   await assertFails(w3.commit());
+});
+
+test("annulation après acompte : l'équipe libère le créneau et enregistre le remboursement", async () => {
+  const o = clientOrder(as("anon"), { hms: ["2000"] });
+  await o.commit();
+  await clientCancel(as("anon"), o);
+  const db = as("amel");
+  const w = writeBatch(db);
+  const auditId = auditEntry(db, w, "amel", "employee", "order.refund");
+  w.update(doc(db, "days", DAY), { "slots.2000": deleteField(), lastOrderId: o.orderId, updatedAt: serverTimestamp(), auditId });
+  w.update(doc(db, "orders", o.orderId), { refund: { amount: 600, method: "cash", by: "amel" }, updatedAt: serverTimestamp(), updatedBy: "amel", auditId });
+  w.update(doc(db, "tracking", o.token), { refunded: 600, updatedAt: serverTimestamp(), auditId });
+  w.set(doc(collection(db, "payments")), { orderId: o.orderId, ref: "", kind: "refund", amount: 600, method: "cash", note: "", recordedAt: serverTimestamp(), recordedBy: "amel", auditId });
+  await assertSucceeds(w.commit());
+  await assertSucceeds(clientOrder(as("anon"), { hms: ["2000"] }).commit());
+  // Le client ne peut pas se déclarer remboursé.
+  await assertFails(updateDoc(doc(as("anon"), "tracking", o.token), { refunded: 9999, updatedAt: serverTimestamp() }));
 });
 
 test("tout le reste est fermé", async () => {

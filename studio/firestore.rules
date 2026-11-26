@@ -5,7 +5,8 @@ rules_version = '2';
 // Il n'y a pas de Cloud Functions : les navigateurs écrivent directement, et ces
 // règles sont le seul garde-fou. Principes :
 //   - le client (sans compte) peut seulement CRÉER une demande, avec ses tranches
-//     de studio et sa fiche de suivi, en une seule écriture groupée ;
+//     de studio et sa fiche de suivi, en une seule écriture groupée, puis l'ANNULER
+//     avec son lien de suivi ;
 //   - une tranche déjà prise ne peut pas être reprise (sauf blocage expiré) :
 //     si une seule tranche est prise, toute la demande est refusée ;
 //   - l'équipe agit selon son rôle (fiche staff/{uid} relue à chaque requête),
@@ -211,13 +212,30 @@ service cloud.firestore {
         && existsAfter(/databases/$(database)/documents/tracking/$(request.resource.data.trackingToken))
         && request.resource.data.catalogVersion == get(/databases/$(database)/documents/publicSettings/catalog).data.version;
 
-      // L'équipe fait avancer la demande (acompte reçu, annulée, terminée…).
-      allow update: if isOperations() && audited()
+      // L'équipe fait avancer la demande (acompte reçu, annulée, remboursée, terminée…).
+      allow update: if (isOperations() && audited()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status', 'ref', 'deposit', 'staffNote', 'pricing', 'updatedAt', 'updatedBy', 'auditId'])
+             .hasOnly(['status', 'ref', 'deposit', 'refund', 'staffNote', 'pricing', 'updatedAt', 'updatedBy', 'auditId'])
         && request.resource.data.status in ['pending', 'confirmed', 'cancelled', 'done']
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.updatedBy == request.auth.uid;
+        && request.resource.data.updatedBy == request.auth.uid)
+        || clientCancel();
+
+      // Le client annule lui-même (avant ou après l'acompte), depuis son lien de suivi :
+      // la fiche de suivi (dont il connaît le jeton secret) est annulée dans le même envoi.
+      // Les tranches du studio et l'éventuel remboursement sont traités ensuite par l'équipe.
+      function clientCancel() {
+        let t = getAfter(/databases/$(database)/documents/tracking/$(resource.data.trackingToken)).data;
+        return resource.data.status in ['pending', 'confirmed']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledBy', 'cancelReason', 'cancelledAt'])
+          && request.resource.data.status == 'cancelled'
+          && request.resource.data.cancelledBy == 'client'
+          && request.resource.data.cancelledAt == request.time
+          && shortText(request.resource.data.cancelReason, 300)
+          && t.status == 'cancelled'
+          && t.cancelledBy == 'client'
+          && t.updatedAt == request.time;
+      }
       allow delete: if false;
     }
 
@@ -234,10 +252,19 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.createdAt == request.time
         && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.trackingToken == token;
 
-      allow update: if isOperations() && audited()
+      allow update: if (isOperations() && audited()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status', 'ref', 'total', 'deposit', 'remaining', 'quotePending', 'lines', 'message', 'updatedAt', 'auditId'])
-        && request.resource.data.updatedAt == request.time;
+             .hasOnly(['status', 'ref', 'total', 'deposit', 'remaining', 'quotePending', 'lines', 'message', 'refunded', 'updatedAt', 'auditId'])
+        && request.resource.data.updatedAt == request.time)
+        // Annulation par le client : seulement avec la demande annulée dans le même envoi.
+        || (resource.data.status in ['pending', 'confirmed']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledBy', 'cancelReason', 'updatedAt'])
+          && request.resource.data.status == 'cancelled'
+          && request.resource.data.cancelledBy == 'client'
+          && shortText(request.resource.data.cancelReason, 300)
+          && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.status == 'cancelled'
+          && getAfter(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.cancelledAt == request.time);
       allow delete: if false;
     }
 
