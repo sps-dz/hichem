@@ -5,10 +5,11 @@
 // (par exemple hero: "img/hero.jpg"). Tant qu'une photo manque, une image
 // d'attente dessinée est affichée à sa place.
 export const PHOTOS = {
-  hero: null,     // grand visuel du haut (portrait ou plateau éclairé)
-  product: null,  // shooting produit
-  editing: null,  // montage
-  video: null,    // vidéo / reels
+  // Photos d'exemple en attendant celles du studio : à remplacer par vos propres photos.
+  hero: "img/hero.jpg",       // grand visuel du haut (portrait ou plateau éclairé)
+  product: "img/product.jpg", // shooting produit
+  editing: "img/editing.jpg", // montage
+  video: "img/video.jpg",     // vidéo / reels
   ad: null,       // pub
 };
 
